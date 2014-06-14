@@ -1,0 +1,1 @@
+pk2cmd -f../obj/toad4.hex -pPIC18f4550 /m /e /j /r

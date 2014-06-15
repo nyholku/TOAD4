@@ -34,10 +34,21 @@
 #define FORWARD (STEPPER.forwardDir)
 #define REVERSE (!STEPPER.forwardDir)
 
-// Make the CDT/Eclipse parser happy with these macros as it does not understand how this file included from an included file
+// Following declarations make the CDT/Eclipse parser happy, necessary
+// because  it does not understand how this file included from an included file
+// Note that this is all fake in the sense that when compiled none of this is
+// used, this is just to make editing in Eclipse cleaner
 #ifdef __CDT_PARSER__
 #define STEP_GENERATION
 #define QUEUE_PROCESSING
+#define	STEPPER steppers[MOTOR_X]
+#define QUEUE queues[MOTOR_X]
+#define STEP_OUTPUT STEP_X
+#define DIR_OUTPUT DIR_X
+#define ENABLE ENABLE_X
+#define HOME_INPUT HOME_X
+#define STEPS_LEFT stepsLeft.motorX
+void dummy_function_declaration()
 #endif
 
 #ifdef STEP_GENERATION
@@ -79,15 +90,15 @@
 		if (STEPPER.accelNCO < oldv) { // acceleration NCO overflow => accelerate
 			if (STEPPER.accelerate) {
 				if (STEPPER.motorSpeed <= 65535-4) // FIXME do we need this guard
-					STEPPER.motorSpeed+=4;
+				STEPPER.motorSpeed+=4;
 				else
-					STEPPER.motorSpeed=65535;
+				STEPPER.motorSpeed=65535;
 			} else {
 				if (STEPPER.motorSpeed > 4) {
 					STEPPER.motorSpeed-=4;
-					}
+				}
 				else
-					STEPPER.motorSpeed=1;
+				STEPPER.motorSpeed=1;
 			}
 		}
 
@@ -208,11 +219,11 @@
 		case STATE_JOG_RUN:
 		if (STEPPER.jogTimeout != 0) {
 			//if (!stepsleft) {
-				STEPPER.jogTimeout--;
-				STEPPER.stepCounter = 1;
+			STEPPER.jogTimeout--;
+			STEPPER.stepCounter = 1;
 			//}
 		}
-		{//if (!stepsleft) {
+		{ //if (!stepsleft) {
 			if (STEPPER.jogFlag == 0 || STEPPER.jogTimeout == 0) {
 				if (STEPPER.motorSpeed > STEPPER.jogLoSpeed) {
 					STEPPER.accelerate = FALSE;
@@ -244,10 +255,14 @@
 		if (STEPPER.state == STATE_PROCESS_QUEUE && STEPPER.front == syncCounter && STEPPER.size != 0) {
 			STEPPER.pop = TRUE;
 			syncC++;
-			}
 		}
+	}
 
 }
+#endif
+
+#ifdef __CDT_PARSER__
+void dummy_function_declaration2()
 #endif
 
 #ifdef QUEUE_PROCESSING
@@ -261,7 +276,7 @@
 			move = -move;
 			forward = 0;
 		} else
-			forward = 1;
+		forward = 1;
 		DIR_OUTPUT = forward ? FORWARD : REVERSE;
 		STEPPER.forward = forward;
 		STEPPER.motorSpeed = cp->moveSpeed;
@@ -273,9 +288,9 @@
 	if (STEPPER.state == STATE_PROCESS_QUEUE) {
 		switch (STEPPER.cmd) {
 			default:
-		case CMD_NONE:
+			case CMD_NONE:
 			break;
-		case CMD_JOG:
+			case CMD_JOG:
 			STEPPER.state = STATE_JOG_PORCH;
 			STEPPER.cmd = CMD_NONE;
 			DIR_OUTPUT = STEPPER.jogForward ? FORWARD : REVERSE;
@@ -284,7 +299,7 @@
 			STEPPER.motorSpeed = STEPPER.jogLoSpeed;
 			STEPPER.acceleration = 0;
 			break;
-		case CMD_SEEK:
+			case CMD_SEEK:
 			if (HOME) {
 				STEPPER.state = STATE_SEEK_NOT_HOME_RAMP_UP;
 				STEPPER.cmd = CMD_NONE;

@@ -57,7 +57,6 @@
 #define STEPS_LEFT stepsLeft.motorZ
 #include "stepperirq-inc-inc.c"
 
-#define DUMMY dummy
 #define	STEPPER steppers[MOTOR_4]
 #define QUEUE queues[MOTOR_4]
 #define STEP_OUTPUT STEP_4

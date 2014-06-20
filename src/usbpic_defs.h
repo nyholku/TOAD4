@@ -60,7 +60,7 @@ typedef struct _setup_packet_struct
     unsigned char windex0;       // LSB of wIndex
     unsigned char windex1;       // MSB of wIndex
     unsigned short wlength;
-    unsigned char extra[56];
+    unsigned char extra[56]; // why is this so big????
 } setup_packet_struct;
 
 #define USTAT_IN (0x04)

@@ -69,17 +69,17 @@ void dummy_function_declaration()
 		// Do the step pulse generation
 		oldv = STEPPER.speedNCO;
 		STEPPER.speedNCO += STEPPER.motorSpeed;
-		if (STEPPER.speedNCO < oldv) { // speed NCO overflow => generate pulse
-			if (STEPPER.motorSpeed) {
-				STEP_OUTPUT = 1;
+		if( STEPPER.speedNCO < oldv) { // speed NCO overflow => generate pulse
+			STEP_OUTPUT = 1;
 #ifdef BLINK_ON_STEP
-				LED_PIN=1;
-				LED_PIN=0;
+			LED_PIN=1;
+			LED_PIN=0;
 #endif
-				STEPPER.stepCounter--;
-				if (STEPPER.forward)
+			STEPPER.stepCounter--;
+			if (STEPPER.forward) {
 				STEPPER.position++;
-				else
+			}
+			else {
 				STEPPER.position--;
 			}
 		}

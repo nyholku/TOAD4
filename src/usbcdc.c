@@ -82,16 +82,9 @@ __code unsigned char device_descriptor[] = { //
     0x08, 0x04, // idVendor lsb, idVendor msb
     0x0A, 0x00, // idProduct lsb, idProduct msb
     0x00, 0x01, // bcdDevice lsb, bcdDevice msb
-    0x01, 0x00, // iManufacturer, iProduct
-    0x00, 0x01 // iSerialNumber (none), bNumConfigurations*/
+    0x01, 0x02, // iManufacturer, iProduct
+    0x00, 0x01  // iSerialNumber (none), bNumConfigurations*/
     
-};
-__code unsigned char device_qualifier_descriptor[] = { //
-    0x0A, 0x06, // bLength, bDescriptorType
-    0x00, 0x02, // bcdUSB lsb, bcdUSB msb
-    0x02, 0x00, // bDeviceClass, bDeviceSubClass
-    0x00, E0SZ, // bDeviceProtocl, bMaxPacketSize
-    0x01, 0x00 // iSerialNumber, bNumConfigurations*/
 };
 
 static __code char const_values_0x00_0x00[] = { 0, 0 };
@@ -146,41 +139,39 @@ config_descriptor = {
     /* Endpoint Descriptors */
     { sizeof(USB_EP_DSC), DSC_EP,_EP02_OUT,
         _BULK,USBCDC_BUFFER_LEN, 0x00, }, //
-    { sizeof(USB_EP_DSC), DSC_EP,_EP02_IN, _BULK,USBCDC_BUFFER_LEN,
+    { sizeof(USB_EP_DSC), DSC_EP,_EP02_OUT, _BULK,USBCDC_BUFFER_LEN,
         0x00 }, //
 };
 
-__code unsigned char string_descriptor0[] = { // available languages  descriptor
+__code unsigned char string_descriptor_0[] = { // available languages  descriptor
     0x04, STRING_DESCRIPTOR, //
-    0x09, 0x04, //
+    0x09, 0x04, //English (United States)
 };
 
-__code unsigned char string_descriptor1[] = { //
-    0x0E, STRING_DESCRIPTOR, // bLength, bDscType
-    'T', 0x00, //
-    'e', 0x00, //
-    's', 0x00, //
-    't', 0x00, //
-    'i', 0x00, //
-    '!', 0x00, //
-};
-__code unsigned char string_descriptor2[] = { //
-    0x20, STRING_DESCRIPTOR, //
-    'U', 0x00, //
+__code unsigned char string_descriptor_1 [] = { // Manufacturer
+    sizeof(string_descriptor_1), STRING_DESCRIPTOR, // bLength, bDscType
     'S', 0x00, //
-    'B', 0x00, //
-    ' ', 0x00, //
-    'G', 0x00, //
-    'e', 0x00, //
-    'n', 0x00, //
-    'e', 0x00, //
+    'p', 0x00, //
+    'a', 0x00, //
     'r', 0x00, //
+    'e', 0x00, //
+    'T', 0x00, //
     'i', 0x00, //
-    'c', 0x00, //
-    ' ', 0x00, //
-    'C', 0x00, //
+    'm', 0x00, //
+    'e', 0x00, //
+    'L', 0x00, //
+    'a', 0x00, //
+    'b', 0x00, //
+    's', 0x00, //
+};
+
+__code unsigned char string_descriptor_2 = { // Product
+    sizeof(string_descriptor_2), STRING_DESCRIPTOR, //
+    'T', 0x00, //
+    'O', 0x00, //
+    'A', 0x00, //
     'D', 0x00, //
-    'C', 0x00, //
+    '4', 0x00, //
 };
 
 // Put endpoint 0 buffers into dual port RAM
@@ -271,10 +262,6 @@ static void get_descriptor(void) {
 			request_handled = 1;
 			code_ptr = (codePtr) &device_descriptor;
 			dlen = *code_ptr;//DEVICE_DESCRIPTOR_SIZE;
-		} else if (descriptorType == QUALIFIER_DESCRIPTOR) {
-			request_handled = 1;
-			code_ptr = (codePtr) &device_qualifier_descriptor;
-			dlen = sizeof(device_qualifier_descriptor);
 		} else if (descriptorType == CONFIGURATION_DESCRIPTOR) {
 			request_handled = 1;
             
@@ -284,11 +271,11 @@ static void get_descriptor(void) {
 		} else if (descriptorType == STRING_DESCRIPTOR) {
 			request_handled = 1;
 			if (descriptorIndex == 0) {
-				code_ptr = (codePtr) &string_descriptor0;
+				code_ptr = (codePtr) &string_descriptor_0;
 			} else if (descriptorIndex == 1) {
-				code_ptr = (codePtr) &string_descriptor1;
+				code_ptr = (codePtr) &string_descriptor_0;
 			} else {
-				code_ptr = (codePtr) &string_descriptor2;
+				code_ptr = (codePtr) &string_descriptor_1;
 			}
 			dlen = *code_ptr;
 		}

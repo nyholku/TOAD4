@@ -98,30 +98,7 @@ void  main(void) {
 	LED_PIN = 0;
 
 	while (1) {
-		if (usbcdc_device_state != CONFIGURED) {
-			if (!rx_timeout) {
-				rx_timeout = 255;
-				if (!blink--) {
-					blink = 23;
-					LED_PIN = !LED_PIN;
-				}
-			}
-		} else {
-			if (getMessage()) {
-				LED_PIN=0;
-				processMessage();
-				//LED_PIN = 1;
-				blink = 12;
-			} else {
-				if (!blink--) {
-					blink = 12;
-					LED_PIN = !LED_PIN;
-					while (UIRbits.TRNIF == 1)
-						UIRbits.TRNIF = 0;
-					usbcdc_read();
-				}
-			}
-		}
+
 	}
 
 }

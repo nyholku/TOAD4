@@ -39,6 +39,9 @@
 #define DSC_STR     0x03
 #define DSC_INTF    0x04
 #define DSC_EP      0x05
+#define DSC_HID         0x21
+#define DSC_RPT         0x22
+#define DSC_PHY         0x23
 
  // USB Endpoint Definitions
 
@@ -100,30 +103,50 @@
 
 typedef struct _USB_DEV_DSC
 {
-    unsigned char bLength;       unsigned char bDscType;      unsigned short bcdUSB;
-    unsigned char bDevCls;       unsigned char bDevSubCls;    unsigned char bDevProtocol;
-    unsigned char bMaxPktSize0;  unsigned short idVendor;      unsigned short idProduct;
-    unsigned short bcdDevice;     unsigned char iMFR;          unsigned char iProduct;
-    unsigned char iSerialNum;    unsigned char bNumCfg;
-} USB_DEV_DSC;
+    unsigned char bLength;
+    unsigned char bDscType;
+    unsigned short bcdUSB;
+    unsigned char bDevCls;
+    unsigned char bDevSubCls;
+    unsigned char bDevProtocol;
+    unsigned char bMaxPktSize0;
+    unsigned short idVendor;
+    unsigned short idProduct;
+    unsigned short bcdDevice;
+    unsigned char iMFR;
+    unsigned char iProduct;
+    unsigned char iSerialNum;
+    unsigned char bNumCfg;
+} USB_DEV_DSC; // size 18
 
 // USB Configuration Descriptor Structure
 
 typedef struct _USB_CFG_DSC
 {
-    unsigned char bLength;       unsigned char bDscType;      unsigned short wTotalLength;
-    unsigned char bNumIntf;      unsigned char bCfgValue;     unsigned char iCfg;
-    unsigned char bmAttributes;  unsigned char bMaxPower;
-} USB_CFG_DSC;
+    unsigned char bLength; //
+    unsigned char bDscType; //
+    unsigned short wTotalLength;//
+    unsigned char bNumIntf; //
+    unsigned char bCfgValue; //
+    unsigned char iCfg;//
+    unsigned char bmAttributes;//
+    unsigned char bMaxPower; //
+} USB_CFG_DSC; // size 9
 
 // USB Interface Descriptor Structure
 
 typedef struct _USB_INTF_DSC
 {
-    unsigned char bLength;       unsigned char bDscType;      unsigned char bIntfNum;
-    unsigned char bAltSetting;   unsigned char bNumEPs;       unsigned char bIntfCls;
-    unsigned char bIntfSubCls;   unsigned char bIntfProtocol; unsigned char iIntf;
-} USB_INTF_DSC;
+    unsigned char bLength;  //
+    unsigned char bDscType; //
+    unsigned char bIntfNum; //
+    unsigned char bAltSetting; //
+    unsigned char bNumEPs; //
+    unsigned char bIntfCls; //
+    unsigned char bIntfSubCls;  //
+    unsigned char bIntfProtocol; //
+    unsigned char iIntf; //
+} USB_INTF_DSC; // size 9
 
 
 //  USB Endpoint Descriptor Structure

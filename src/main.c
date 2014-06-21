@@ -42,9 +42,9 @@
 #include "PIC-config.c"
 
 static u8 blink = 0;
+void test_hid();
 
-
-void  main(void) {
+void main(void) {
 	OSCCON = 0x70;
 	initIO();
 
@@ -98,7 +98,8 @@ void  main(void) {
 	LED_PIN = 0;
 
 	while (1) {
+		test_hid();
+		}
 
-	}
 
 }

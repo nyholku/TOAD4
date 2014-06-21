@@ -30,11 +30,13 @@
  * OF SUCH DAMAGE.
  */
 
+#include "usb_hid.h"
 #include "types.h"
 #include "pic18f4550.h"
-#include "usbpic_defs.h"
+#include "usb_pic_defs.h"
 #include "usb_defs.h"
 #include "toad4.h"
+#include "stdint.h"
 
 #define	HID_GET_REPORT  0x1
 #define	HID_GET_IDLE 0x2
@@ -43,68 +45,30 @@
 #define	HID_SET_IDLE 0xa
 #define	HID_SET_PROTOCOL 0xb
 
-/*
- *                #pragma config PLLDIV   = 5
- #pragma config CPUDIV   = OSC1_PLL2
- #pragma config USBDIV   = 2
- #pragma config FOSC     = HSPLL_HS
- #pragma config FCMEN    = OFF
- #pragma config IESO     = OFF
- #pragma config PWRT     = OFF
- #pragma config BOR      = ON
- #pragma config BORV     = 3
- #pragma config VREGEN   = ON
- #pragma config WDT      = OFF
- #pragma config WDTPS    = 32768
- #pragma config MCLRE    = ON
- #pragma config LPT1OSC  = OFF
- #pragma config PBADEN   = OFF
- #pragma config STVREN   = ON
- #pragma config LVP      = OFF
- #pragma config XINST    = OFF
- #pragma config CP0      = OFF
- #pragma config CP1      = OFF
- #pragma config CPB      = OFF
- #pragma config WRT0     = OFF
- #pragma config WRT1     = OFF
- #pragma config WRTB     = OFF
- #pragma config WRTC     = OFF
- #pragma config EBTR0    = OFF
- #pragma config EBTR1    = OFF
- #pragma config EBTRB    = OFF
-
-
- #if defined(__18F2550) || defined(__18F2553)||  defined(__18F4550) || defined(__18F4553)
-
- #pragma config CP3      = OFF
- #pragma config WRT3     = OFF
- #pragma config EBTR3    = OFF
- *
- */
 typedef __code unsigned char* codePtr;
 typedef __data unsigned char* dataPtr;
 
-// /Users/nyholku/usbcdcacm-junk/USB_CDC_skeleton_15/USB_Descriptor.h
 #define HID_INTF                    0x03
 #define E0SZ                   		8
 
+// A lot of this stuff depends on PIC endianness (i.e. little endian)
 typedef struct _USB_HID_DSC {
-	unsigned char bLength;
-	unsigned char bDescriptorType;
-	unsigned short bcdHID;
-	unsigned char bCountryCode;
-	unsigned char bNumDescriptors;
-	unsigned char bReportDescriptorType;
-	unsigned short wReportDescriptorLength;
-} USB_HID_DSC;
+	uint8_t bLength;
+	uint8_t bDescriptorType;
+	uint16_t bcdHID;
+	uint8_t bCountryCode;
+	uint8_t bNumDescriptors;
+	uint8_t bReportDescriptorType;
+	uint16_t wReportDescriptorLength;
+} usb_hid_desc_t;
 
 typedef struct {
 	USB_CFG_DSC cd01;
 	USB_INTF_DSC i01a00;
-	USB_HID_DSC hid_01a00;
-	USB_EP_DSC ep01i_i01a00;
-	USB_EP_DSC ep02i_i01a00;
-} config_struct;
+	usb_hid_desc_t hid_01a00;
+	usb_ep_desc_t ep01i_i01a00;
+	usb_ep_desc_t ep02i_i01a00;
+} config_struct_t;
 
 __code USB_DEV_DSC device_descriptor = { //
 		sizeof(USB_DEV_DSC),    		// bLength
@@ -123,13 +87,12 @@ __code USB_DEV_DSC device_descriptor = { //
 				0x01                    // bNumConfigurations
 		};
 
-// Configuration 1 Descriptor
-__code config_struct config_descriptor = { //
+__code config_struct_t config_descriptor = { //
 		{
 		// Configuration Descriptor
 				0x09,// Size of this descriptor in bytes
 				DSC_CFG,	                    // CONFIGURATION descriptor type
-				sizeof(config_struct),			// Total length of data for this cfg
+				sizeof(config_struct_t),		// Total length of data for this configuration
 				1,								// bNumInterfaces
 				1,								// bConfigurationValue
 				0,								// iConfiguration
@@ -141,23 +104,23 @@ __code config_struct config_descriptor = { //
 						DSC_INTF,		                // INTERFACE descriptor type
 						0,								// Interface Number
 						0,								// Alternate Setting Number
-						2,								// Number of endpoints in this intf
+						2,								// Number of endpoints in this interfacee
 						HID_INTF,						// Class code
 						0,								// Subclass code
 						0,								// Protocol code
 						0,								// Interface string index
 				}, {
 				// HID Class-Specific Descriptor
-						sizeof(USB_HID_DSC),			// Size of this descriptor in bytes (sizeof(USB_HID_DSC)+3)
+						sizeof(usb_hid_desc_t),			// Size of this descriptor in bytes
 						DSC_HID,						// HID descriptor type
 						0x0111,							// HID Spec Release Number in BCD format (1.11)
 						0x00,							// Country Code (0x00 for Not supported)
 						1,					            // Number of class descriptors, see usbcfg.h
 						DSC_RPT,						// Report descriptor type
-						sizeof(hid_rpt01),			   	// Size of the report descriptor (sizeof(hid_rpt01))
+						sizeof(hid_rpt01),			   	// Size of the report descriptor
 				}, {
 				// Endpoint Descriptor
-						sizeof(USB_EP_DSC),				// sizeof(USB_EP_DSC)
+						sizeof(usb_ep_desc_t),				// Size of this descriptor in bytes
 						DSC_EP,		                    // Endpoint Descriptor
 						_EP02_IN,				        // Endpoint Address
 						_INT,						    // Attributes
@@ -165,7 +128,7 @@ __code config_struct config_descriptor = { //
 						0x01,							// Interval
 				}, {
 				// Endpoint Descriptor
-						sizeof(USB_EP_DSC),				// sizeof(USB_EP_DSC)
+						sizeof(usb_ep_desc_t),				// Size of this descriptor in bytes
 						DSC_EP,		                    // Endpoint Descriptor
 						_EP02_OUT,				        // EndpointAddress
 						_INT,						    // Attributes
@@ -173,38 +136,23 @@ __code config_struct config_descriptor = { //
 						0x01							// Interval
 				} };
 
-__code unsigned char string_descriptor_0[] = { // available languages  descriptor
-		0x04, STRING_DESCRIPTOR, //
-				0x09, 0x04, //English (United States)
+
+__code uint16_t string_descriptor_0[] = { // available languages  descriptor
+		sizeof(string_descriptor_0) + (STRING_DESCRIPTOR << 8),   //
+		0x0409, //English (United States), note the endianness conversion
 		};
 
-__code unsigned char string_descriptor_1[] = { // Manufacturer
-		sizeof(string_descriptor_1), STRING_DESCRIPTOR, // bLength, bDscType
-				'S', 0x00, //
-				'p', 0x00, //
-				'a', 0x00, //
-				'r', 0x00, //
-				'e', 0x00, //
-				'T', 0x00, //
-				'i', 0x00, //
-				'm', 0x00, //
-				'e', 0x00, //
-				'L', 0x00, //
-				'a', 0x00, //
-				'b', 0x00, //
-				's', 0x00, //
+__code uint16_t string_descriptor_1[] = { // Manufacturer
+		sizeof(string_descriptor_1) + (STRING_DESCRIPTOR << 8),   //
+		'S', 'p', 'a', 'r', 'e', 'T', 'i', 'm', 'e', 'L', 'a', 'b', 's'  //
 		};
 
-__code unsigned char string_descriptor_2[] = { // Product
-		sizeof(string_descriptor_2), STRING_DESCRIPTOR, // bLength, bDscType
-				'T', 0x00, //
-				'O', 0x00, //
-				'A', 0x00, //
-				'D', 0x00, //
-				'4', 0x00, //
+__code uint16_t string_descriptor_2[] = { // Manufacturer
+		sizeof(string_descriptor_2) + (STRING_DESCRIPTOR << 8),   //
+		'T', 'O', 'A', 'D', '4'  //
 		};
 
-// Class specific descriptor - HID
+// HID report descriptor
 __code unsigned char hid_rpt01[] = { // 28 bytes
 		0x06, 0x00, 0xFF,       // Usage Page = 0xFF00 (Vendor Defined Page 1)
 				0x09, 0x01,             // Usage (Vendor Usage 1)
@@ -222,30 +170,27 @@ __code unsigned char hid_rpt01[] = { // 28 bytes
 				0xC0                   // End Collection
 		};
 
-//Raw Descriptor (hex)    0000: 06 00 FF 09 01 A1 01 19  01 29 40 15 00 26 FF 00
-//Raw Descriptor (hex)    0010: 75 08 95 40 81 02 19 01  29 40 91 02 C0
-
 // Global variables
-static __code char const_values_0x00_0x01[] = { 0, 1 };
-static __code char device_status[] = { 0, 0 };
-static __code char interface_status[] = { 0, 1 };
-static __code char endpoint_status_stall[] = { 1, 0 };
-static __code char endpoint_status_no_stall[] = { 0, 0 };
+static __code uint8_t const_values_0x00_0x01[] = { 0, 1 };
+static __code uint8_t device_status[] = { 0, 0 };
+static __code uint8_t interface_status[] = { 0, 1 };
+static __code uint8_t endpoint_status_stall[] = { 1, 0 };
+static __code uint8_t endpoint_status_no_stall[] = { 0, 0 };
 
-volatile unsigned char hid_rx_buffer[64];
-volatile unsigned char hid_tx_buffer[64];
+volatile uint8_t hid_rx_buffer[64];
+volatile uint8_t hid_tx_buffer[64];
 
-unsigned char device_state;
+uint8_t device_state;
 
-static unsigned char device_address;
-static unsigned char current_configuration; // 0 or 1
-static unsigned char idx; // loop counter for data transfers loops
-static unsigned char control_stage; // Holds the current stage in a control transfer
-static unsigned char request_handled; // Set to 1 if request was understood and processed.
+static uint8_t device_address;
+static uint8_t current_configuration; // 0 or 1
+static uint8_t idx; // loop counter for data transfers loops
+static uint8_t control_stage; // Holds the current stage in a control transfer
+static uint8_t request_handled; // Set to 1 if request was understood and processed.
 static dataPtr data_ptr; // Data to host from RAM
 static codePtr code_ptr; // Data to host from FLASH
 static dataPtr in_ptr; // Data from the host
-static unsigned char dlen; // Number of unsigned chars of data
+static uint8_t dlen; // Number of unsigned chars of data
 
 // See USB spec chapter 5
 #define SETUP_STAGE    0
@@ -258,7 +203,7 @@ static unsigned char dlen; // Number of unsigned chars of data
 #pragma udata usbram5 setup_packet control_transfer_buffer hid_rx_buffer hid_tx_buffer
 
 static volatile setup_packet_struct setup_packet;
-static volatile unsigned char control_transfer_buffer[E0SZ];
+static volatile uint8_t control_transfer_buffer[E0SZ];
 
 // Notes:
 // File:
@@ -873,7 +818,7 @@ void usbcdc_handler(void) {
 
 void test_hid() {
 	if ((ep2_i.STAT & UOWN) == 0) {
-		LED_PIN=!LED_PIN;
+		LED_PIN = !LED_PIN;
 		hid_tx_buffer[0]++;
 		ep2_i.CNT = 64;
 		if (ep2_i.STAT & DTS)
@@ -882,10 +827,10 @@ void test_hid() {
 			ep2_i.STAT = UOWN | DTS | DTSEN;
 	}
 
-	if(! (ep2_o.STAT & UOWN)) {
+	if (!(ep2_o.STAT & UOWN)) {
 		char i;
 		ep2_o.CNT = 64;
-		for (i=0; i<64; ++i)
+		for (i = 0; i < 64; ++i)
 			hid_tx_buffer[i] = hid_rx_buffer[i];
 		if (ep2_o.STAT & DTS)
 			ep2_o.STAT = UOWN | DTSEN;
@@ -893,7 +838,6 @@ void test_hid() {
 			ep2_o.STAT = UOWN | DTS | DTSEN;
 
 	}
-
 
 }
 // 7.2.2

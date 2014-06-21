@@ -30,8 +30,8 @@
  * OF SUCH DAMAGE.
  */
 
-#ifndef USBDEFS_H
-#define USBDEFS_H
+#ifndef __USB_H__
+#define __USB_H__
 
 // Descriptor Types
 #define DSC_DEV     0x01
@@ -155,7 +155,7 @@ typedef struct _USB_EP_DSC
 {
     unsigned char bLength;       unsigned char bDscType;      unsigned char bEPAdr;
     unsigned char bmAttributes;  unsigned short wMaxPktSize;   unsigned char bInterval;
-} USB_EP_DSC;
+} usb_ep_desc_t;
 
 //
 // Standard Request Codes USB 2.0 Spec Ref Table 9-4

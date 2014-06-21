@@ -40,7 +40,7 @@ TARGET = toad4.hex
 
 # The source files that make up the project go here 
 //SRCS =	 stepper.c cmdQueue.c cmdInterp.c usartirq.c main.c tests.c stepperirq.c usbcdc.c
-SRCS =	 stepper.c stepperirq.c main.c toad4.c usb_hid.c
+SRCS =	 stepper.c stepperirq.c main.c toad4.c usb_hid.c usb_core.c
 #
  
 # The libraries that are used go here

@@ -1,5 +1,5 @@
 /*
- * File: usbcdc_defs.h
+ * File: usb_cdc_defs.h
  *
  * Copyright (c) 2011, Kustaa Nyholm / SpareTimeLabs
  * All rights reserved.
@@ -30,8 +30,8 @@
  * OF SUCH DAMAGE.
  */
 
-#ifndef USBCDC_DEFS_H
-#define USBCDC_DEFS_H
+#ifndef __USB_CDC_DEFS_H__
+#define __USB_CDC_DEFS_H__
 
 #define PTR16(x) ((unsigned int)(((unsigned long)x) & 0xFFFF))
 

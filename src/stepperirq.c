@@ -33,7 +33,7 @@
 #include "stepper.h"
 #include "toad4.h"
 #include "critical.h"
-#include "usbcdc.h"
+#include "usb_cdc.h"
 
 volatile u8 waitInt;
 

@@ -1,5 +1,5 @@
 /*
- * File: usbcdc.c
+ * File: usb_cdc.c
  *
  * Copyright (c) 2011, Kustaa Nyholm / SpareTimeLabs
  * All rights reserved.
@@ -32,9 +32,9 @@
 
 #include "types.h"
 #include "pic18f4550.h"
-#include "usbcdc.h"
-#include "usbpic_defs.h"
-#include "usbcdc_defs.h"
+#include "usb_cdc.h"
+#include "usb_pic_defs.h"
+#include "usb_cdc_defs.h"
 #include "usb_defs.h"
 
 typedef __code unsigned char* codePtr;
@@ -49,10 +49,10 @@ typedef struct {
 	USB_CDC_CALL_MGT_FN_DSC cdc_call_mgt_fn_i01a00;
 	USB_CDC_ACM_FN_DSC cdc_acm_fn_i01a00;
 	USB_CDC_UNION_FN_DSC cdc_union_fn_i01a00;
-	USB_EP_DSC ep02i_i01a00;
+	usb_ep_desc_t ep02i_i01a00;
 	USB_INTF_DSC i02a00;
-	USB_EP_DSC ep03o_i02a00;
-	USB_EP_DSC ep03i_i02a00;
+	usb_ep_desc_t ep03o_i02a00;
+	usb_ep_desc_t ep03i_i02a00;
 } config_struct;
 
 // Global variables
@@ -124,7 +124,7 @@ config_descriptor = {
         DSC_FN_UNION, CDC_COMM_INTF_ID, CDC_DATA_INTF_ID },
     /* Endpoint Descriptor */
     {//notification endpoint
-        sizeof(USB_EP_DSC), DSC_EP,_EP01_IN, _INT,CDC_INT_EP_SIZE, 0x0A, },
+        sizeof(usb_ep_desc_t), DSC_EP,_EP01_IN, _INT,CDC_INT_EP_SIZE, 0x0A, },
     /* Interface Descriptor */
     { sizeof(USB_INTF_DSC), // Size of this descriptor in unsigned chars
         DSC_INTF, // INTERFACE descriptor type
@@ -137,9 +137,9 @@ config_descriptor = {
         2, // Interface string index
     },
     /* Endpoint Descriptors */
-    { sizeof(USB_EP_DSC), DSC_EP,_EP02_OUT,
+    { sizeof(usb_ep_desc_t), DSC_EP,_EP02_OUT,
         _BULK,USBCDC_BUFFER_LEN, 0x00, }, //
-    { sizeof(USB_EP_DSC), DSC_EP,_EP02_OUT, _BULK,USBCDC_BUFFER_LEN,
+    { sizeof(usb_ep_desc_t), DSC_EP,_EP02_OUT, _BULK,USBCDC_BUFFER_LEN,
         0x00 }, //
 };
 

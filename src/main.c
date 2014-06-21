@@ -32,7 +32,7 @@
 
 #include "types.h"
 #include <pic18fregs.h>
-#include "usbcdc.h"
+#include "usb_cdc.h"
 #include "usb_defs.h"
 
 #include "stepper.h"

@@ -1,5 +1,5 @@
 /*
- * File: usbpic_defs.h
+ * File: usb_cdc.h
  *
  * Copyright (c) 2011, Kustaa Nyholm / SpareTimeLabs
  * All rights reserved.
@@ -30,50 +30,39 @@
  * OF SUCH DAMAGE.
  */
 
-#ifndef USBPIC_H
-#define USBPIC_H
+#ifndef __USBCDC_H_
+#define __USBCDC_H_
 
-// Version 1.1     Compatible with SDCC 3.x
+extern unsigned char usbcdc_device_state;
 
-#define UOWN   0x80 // USB Own Bit
-#define DTS    0x40 // Data Toggle Synchronization Bit
-#define KEN    0x20 // BD Keep Enable Bit
-#define INCDIS 0x10 // Address Increment Disable Bit
-#define DTSEN  0x08 // Data Toggle Synchronization Enable Bit
-#define BSTALL 0x04 // Buffer Stall Enable Bit
-#define BC9    0x02 // Byte count bit 9
-#define BC8    0x01 // Byte count bit 8
+#define USBCDC_BUFFER_LEN 32
+#define USBCDC_SELF_POWERED 1
+#define USBCDC_MAXPOWER 100
 
-typedef struct _BDT
-{
-    unsigned char STAT;
-    unsigned char CNT;
-    unsigned int ADDR;
-} BDT;
+// initialize usbcdc module
+void usbcdc_init(void);
 
-typedef struct _setup_packet_struct
-{
-    unsigned char bmrequesttype;
-    unsigned char brequest;
-    unsigned char wvalue0;       // LSB of wValue
-    unsigned char wvalue1;       // MSB of wValue
-    unsigned char windex0;       // LSB of wIndex
-    unsigned char windex1;       // MSB of wIndex
-    unsigned short wlength;
-    unsigned char extra[56]; // why is this so big????
-} setup_packet_struct;
+// waitiuntil the device is configure (if you care)
+void cdc_wait_config();
 
-#define USTAT_IN (0x04)
-#define USTAT_OUT (0x00)
 
-//endpoints
-volatile BDT __at (0x0400+0*8) ep0_o;
-volatile BDT __at (0x0404+0*8) ep0_i;
-volatile BDT __at (0x0400+1*8) ep1_o;
-volatile BDT __at (0x0404+1*8) ep1_i;
-volatile BDT __at (0x0400+2*8) ep2_o;
-volatile BDT __at (0x0404+2*8) ep2_i;
-volatile BDT __at (0x0400+3*8) ep3_o;
-volatile BDT __at (0x0404+3*8) ep3_i;
+// handle usb control messages, poll atleast every 1ms or call from IRQ
+void usbcdc_handler(void);
+
+void usbcdc_putchar(char c) __wparam;
+
+void usbcdc_flush();
+
+char usbcdc_getchar() ;
+
+#pragma udata usbram5 setup_packet control_transfer_buffer cdc_rx_buffer cdc_tx_buffer cdcint_buffer
+extern volatile unsigned char cdc_tx_buffer[];
+char usbcdc_wr_busy();
+void usbcdc_write(unsigned char len) __wparam;
+
+extern volatile unsigned char cdc_rx_buffer[];
+unsigned char usbcdc_rd_ready();
+void usbcdc_read();
+#define usbcdc_rd_len() (ep2_o.CNT)
 
 #endif

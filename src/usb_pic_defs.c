@@ -1,5 +1,5 @@
 /*
- * File: usb_cdc_defs.h
+ * File: usb_pic_defs.c
  *
  * Copyright (c) 2011, Kustaa Nyholm / SpareTimeLabs
  * All rights reserved.
@@ -30,8 +30,16 @@
  * OF SUCH DAMAGE.
  */
 
-#ifndef USB_CDC_DEFS_H_
-#define USB_CDC_DEFS_H_
 
-#include "usb_defs.h"
-#endif /* USB_CDC_DEFS_H */
+#include "usb_pic_defs.h"
+#include "types.h"
+
+
+__at (0x0400+0*8) volatile BDT ep0_o;
+__at (0x0404+0*8) volatile BDT ep0_i;
+__at (0x0400+1*8) volatile BDT ep1_o;
+__at (0x0404+1*8) volatile BDT ep1_i;
+__at (0x0400+2*8) volatile BDT ep2_o;
+__at (0x0404+2*8) volatile BDT ep2_i;
+__at (0x0400+3*8) volatile BDT ep3_o;
+__at (0x0404+3*8) volatile BDT ep3_i;

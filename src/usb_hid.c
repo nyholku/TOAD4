@@ -35,7 +35,7 @@
 #include "usb_pic_defs.h"
 #include "usb_defs.h"
 #include "toad4.h" // DEBUG ONLY
-
+#include "usb_core.h"
 void test_hid() {
 	if ((ep2_i.STAT & UOWN) == 0) {
 		LED_PIN = !LED_PIN;

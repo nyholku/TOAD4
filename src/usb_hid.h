@@ -33,7 +33,7 @@
 #ifndef USB_HID_H_
 #define USB_HID_H_
 
-#include "usb_core.h"
+#include "usb_defs.h"
 
 #define	HID_GET_REPORT  0x1
 #define	HID_GET_IDLE 0x2

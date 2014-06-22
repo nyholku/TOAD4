@@ -30,15 +30,20 @@
  * OF SUCH DAMAGE.
  */
 
-#ifndef __USB_CDC_DEFS_H__
-#define __USB_CDC_DEFS_H__
+#ifndef USB_CDC_DEFS_H_
+#define USB_CDC_DEFS_H_
+
+#include "usb_defs.h"
 
 #define PTR16(x) ((unsigned int)(((unsigned long)x) & 0xFFFF))
 
 // Size of the buffer for endpoint 0
 #define E0SZ 16
 
+//
 // CDC
+//
+
 #define CDC_COMM_INTF_ID        0x00
 #define CDC_COMM_UEP            UEP2
 #define CDC_INT_BD_IN           ep2Bi
@@ -51,7 +56,9 @@
 #define CDC_BULK_BD_IN          ep3Bi
 #define CDC_BULK_IN_EP_SIZE     8
 
+//
 // Class-Specific Requests
+//
 
 #define SEND_ENCAPSULATED_COMMAND   0x00
 #define GET_ENCAPSULATED_RESPONSE   0x01
@@ -67,38 +74,53 @@
 #define RESPONSE_AVAILABLE          0x01
 #define SERIAL_STATE                0x20
 
-
+//
 // Device Class Code
+//
 #define CDC_DEVICE                  0x02
 
+//
 // Communication Interface Class Code
+//
 #define COMM_INTF                   0x02
 
+//
 // Communication Interface Class SubClass Codes
+//
 #define ABSTRACT_CONTROL_MODEL      0x02
 
+//
 // Communication Interface Class Control Protocol Codes
+//
 #define V25TER                      0x01
 
-
+//
 // Data Interface Class Codes
+//
 #define DATA_INTF                   0x0A
 
+//
 // Data Interface Class Protocol Codes
+//
 #define NO_PROTOCOL                 0x00
 
-
+//
 // Communication Feature Selector Codes
+//
 
 #define ABSTRACT_STATE              0x01
 #define COUNTRY_SETTING             0x02
 
+//
 // Functional Descriptors
+//
 
 #define CS_INTERFACE                0x24
 #define CS_ENDPOINT                 0x25
 
+//
 // bDscSubType in Functional Descriptors
+//
 
 #define DSC_FN_HEADER               0x00
 #define DSC_FN_CALL_MGT             0x01
@@ -111,58 +133,66 @@
 #define DSC_FN_TEL_OP_MODES         0x08
 #define DSC_FN_USB_TERMINAL         0x09
 
+//
 // CDC Bulk IN transfer states
+//
 #define CDC_TX_READY                0
 #define CDC_TX_BUSY                 1
 #define CDC_TX_BUSY_ZLP             2       // ZLP: Zero Length Packet
 #define CDC_TX_COMPLETING           3
 
-
+//
 // Line Coding Structure
-#define LINE_CODING_LENGTH          0x07
+//
 
+typedef struct {
+	uint8_t bLinecoding[7];
+} line_coding_t;
 
-
+//
 // Header Functional Descriptor
+//
 
-typedef struct _USB_CDC_HEADER_FN_DSC
-{
-    unsigned char bFNLength;
-    unsigned char bDscType;
-    unsigned char bDscSubType;
-    unsigned short bcdCDC;
-} USB_CDC_HEADER_FN_DSC;
+typedef struct {
+	uint8_t bFNLength; //
+	uint8_t bDscType; //
+	uint8_t bDscSubType; //
+	uint16_t bcdCDC; //
+} usb_cdc_header_fn_desc_t; //
 
+//
 // Abstract Control Management Functional Descriptor
+//
 
-typedef struct _USB_CDC_ACM_FN_DSC
-{
-    unsigned char bFNLength;
-    unsigned char bDscType;
-    unsigned char bDscSubType;
-    unsigned char bmCapabilities;
-} USB_CDC_ACM_FN_DSC;
+typedef struct {
+	uint8_t bFNLength; //
+	uint8_t bDscType; //
+	uint8_t bDscSubType; //
+	uint8_t bmCapabilities; //
+} usb_cdc_acm_fn_desc_t;
 
+//
 // Union Functional Descriptor
+//
 
-typedef struct _USB_CDC_UNION_FN_DSC
-{
-    unsigned char bFNLength;
-    unsigned char bDscType;
-    unsigned char bDscSubType;
-    unsigned char bMasterIntf;
-    unsigned char bSaveIntf0;
-} USB_CDC_UNION_FN_DSC;
+typedef struct {
+	uint8_t bFNLength; //
+	uint8_t bDscType; //
+	uint8_t bDscSubType; //
+	uint8_t bMasterIntf; //
+	uint8_t bSaveIntf0; //
+} usb_cdc_union_fn_desc_t;
 
+//
 // Call Management Functional Descriptor
+//
 
-typedef struct _USB_CDC_CALL_MGT_FN_DSC
-{
-    unsigned char bFNLength;
-    unsigned char bDscType;
-    unsigned char bDscSubType;
-    unsigned char bmCapabilities;
-    unsigned char bDataInterface;
-} USB_CDC_CALL_MGT_FN_DSC;
+typedef struct {
+	uint8_t bFNLength; //
+	uint8_t bDscType; //
+	uint8_t bDscSubType; //
+	uint8_t bmCapabilities; //
+	uint8_t bDataInterface; //
+} usb_cdc_call_mgt_fn_desc_t;
 
-#endif /* USBCDC_DEFS_H */
+#endif /* USB_CDC_DEFS_H */

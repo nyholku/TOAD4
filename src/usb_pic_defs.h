@@ -30,10 +30,8 @@
  * OF SUCH DAMAGE.
  */
 
-#ifndef __USB_PIC_DEFS_H__
-#define __USB_PIC_DEFS_H__
-
-// Version 1.1     Compatible with SDCC 3.x
+#ifndef USB_PIC_DEFS_H__
+#define USB_PIC_DEFS_H__
 
 #define UOWN   0x80 // USB Own Bit
 #define DTS    0x40 // Data Toggle Synchronization Bit
@@ -61,19 +59,19 @@ typedef struct _setup_packet_struct
     unsigned char windex1;       // MSB of wIndex
     unsigned short wlength;
     unsigned char extra[56]; // why is this so big????
-} setup_packet_struct;
+} setup_packet_struct_t;
 
 #define USTAT_IN (0x04)
 #define USTAT_OUT (0x00)
 
-//endpoints
-volatile BDT __at (0x0400+0*8) ep0_o;
-volatile BDT __at (0x0404+0*8) ep0_i;
-volatile BDT __at (0x0400+1*8) ep1_o;
-volatile BDT __at (0x0404+1*8) ep1_i;
-volatile BDT __at (0x0400+2*8) ep2_o;
-volatile BDT __at (0x0404+2*8) ep2_i;
-volatile BDT __at (0x0400+3*8) ep3_o;
-volatile BDT __at (0x0404+3*8) ep3_i;
+extern __at (0x0400+0*8) volatile BDT ep0_o;
+extern __at (0x0404+0*8) volatile BDT ep0_i;
+extern __at (0x0400+1*8) volatile BDT ep1_o;
+extern __at (0x0404+1*8) volatile BDT ep1_i;
+extern __at (0x0400+2*8) volatile BDT ep2_o;
+extern __at (0x0404+2*8) volatile BDT ep2_i;
+extern __at (0x0400+3*8) volatile BDT ep3_o;
+extern __at (0x0404+3*8) volatile BDT ep3_i;
+
 
 #endif

@@ -30,9 +30,29 @@
  * OF SUCH DAMAGE.
  */
 
-#ifndef __USB_HID_H__
-#define __USB_HID_H__
+#ifndef USB_HID_H_
+#define USB_HID_H_
+
+#include "usb_core.h"
+
+#define	HID_GET_REPORT  0x1
+#define	HID_GET_IDLE 0x2
+#define	HID_GET_PROTOCOL 0x3
+#define	HID_SET_REPORT 0x9
+#define	HID_SET_IDLE 0xa
+#define	HID_SET_PROTOCOL 0xb
+
+#define HID_INTF 0x03
+
+typedef struct { //
+	uint8_t bLength; //
+	uint8_t bDescriptorType; //
+	uint16_t bcdHID; //
+	uint8_t bCountryCode; //
+	uint8_t bNumDescriptors; //
+	uint8_t bReportDescriptorType; //
+	uint16_t wReportDescriptorLength; //
+} usb_hid_desc_t;
 
 
-
-#endif /* USBDEFS_H */
+#endif /* USB_HID_H */

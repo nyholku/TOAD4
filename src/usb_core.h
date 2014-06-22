@@ -33,6 +33,19 @@
 #ifndef USB_CORE_H_
 #define USB_CORE_H_
 
+#include "usb_defs.h"
+#include "usb_user_config.h"
+
+
+extern volatile uint8_t hid_rx_buffer[64];
+extern volatile uint8_t hid_tx_buffer[64];
+
+extern uint8_t device_state;
+extern uint8_t device_address;
+extern uint8_t current_configuration;
+
+void usbcdc_init(void);
+void usbcdc_handler(void);
 
 
 #endif /* USB_CORE_H_ */

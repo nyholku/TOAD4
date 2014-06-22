@@ -30,8 +30,8 @@
  * OF SUCH DAMAGE.
  */
 
-#ifndef __USBCDC_H_
-#define __USBCDC_H_
+#ifndef USBCDC_H_
+#define USBCDC_H_
 
 extern unsigned char usbcdc_device_state;
 
@@ -39,14 +39,10 @@ extern unsigned char usbcdc_device_state;
 #define USBCDC_SELF_POWERED 1
 #define USBCDC_MAXPOWER 100
 
-// initialize usbcdc module
 void usbcdc_init(void);
 
-// waitiuntil the device is configure (if you care)
 void cdc_wait_config();
 
-
-// handle usb control messages, poll atleast every 1ms or call from IRQ
 void usbcdc_handler(void);
 
 void usbcdc_putchar(char c) __wparam;

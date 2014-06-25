@@ -54,8 +54,8 @@ volatile u8 waitInt = 0;
 void init_stepperirq_test() {
 	uint8_t i;
 	for (i=0; i<4; i++) {
-		g.motor[i].next_speed = 32000;
-		g.motor[i].next_steps = 200;
+		g.motor[i].next_speed = 6000;
+		g.motor[i].next_steps = 1;
 	}
 	steppers[0].accelNCO = 0;
 	queues[0].queue[0].moveDistance = 0;

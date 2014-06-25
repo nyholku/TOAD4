@@ -29,10 +29,39 @@
 ;   BNC _00114_DS_
 ; 5) 4 x "MOTOR.nco_hi_bit=0;" remove
 ;	BCF	(_g + 5), 7, B
-; 6) TODO: optimize pro/epilogues
-
-
-
+; 6) optimize pro/epilogues, basically nothing needs explicit saving
+; 7) replace:
+;	.line	126; stepperirq.c	MOTOR.steps = MOTOR.next_steps;
+;	MOVFF	(_g + 21), r0x00
+;	MOVF	r0x00, W
+;	MOVWF	(_g + 17), B
+;	.line	127; stepperirq.c	MOTOR.speed = MOTOR.next_speed;
+;	MOVFF	(_g + 19), r0x00
+;	MOVFF	(_g + 20), r0x01
+;	MOVF	r0x00, W
+;	MOVWF	(_g + 15), B
+;	MOVF	r0x01, W
+;	MOVWF	(_g + 16), B
+; with:
+;   MOVFF	(_g + 21), (_g + 17)
+;   MOVFF	(_g + 19), (_g + 15)
+;   MOVFF	(_g + 20), (_g + 16)
+; 8)
+; remove r0x01
+; 9) replace:
+; 	.line	121; stepperirq.c	MOTOR.steps--;
+;	DECF	r0x00, F
+;	MOVF	r0x00, W
+;	MOVWF	(_g + 17), B
+; with:
+;   DECF	(_g + 17), F
+; 10) replace:
+;	.line	119; stepperirq.c	if (MOTOR.steps) {
+;	MOVFF	(_g + 17), r0x00
+;	MOVF	r0x00, W
+;	BZ	_00123_DS_
+; with:
+;	MOVF	(_g + 17), W
 
 
 ;--------------------------------------------------------
@@ -308,7 +337,7 @@ _g	db	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 	db	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 ;
 r0x00 db 0x00
-r0x01 db 0x00
+;r0x01 db 0x00
 ;
 ; Internal registers
 .registers	udata_ovr	0x0000
@@ -331,18 +360,7 @@ S_stepperirq__high_priority_interrupt_service	code
 _high_priority_interrupt_service:
 ;	.line	67; stepperirq.c	void high_priority_interrupt_service() __interrupt(1) {
 ;	.line	69; stepperirq.c	LED_PIN = 1;
-	BSF	_LATBbits, 4
-;	MOVFF	STATUS, POSTDEC1
-;	MOVFF	BSR, POSTDEC1
-;	MOVWF	POSTDEC1
-;	MOVFF	PRODL, POSTDEC1
-;	MOVFF	PRODH, POSTDEC1
-;	MOVFF	FSR0L, POSTDEC1
-;	MOVFF	FSR0H, POSTDEC1
-;	MOVFF	PCLATH, POSTDEC1
-;	MOVFF	PCLATU, POSTDEC1
-;	MOVFF	FSR2L, POSTDEC1
-;	MOVFF	FSR1L, FSR2L
+	BSF	_LATBbits, 4 ;// FIXME: THIS LINE JUST FOR TESTING
 ;	.line	71; stepperirq.c	if (PIR1bits.TMR2IF) {
 	BTFSS	_PIR1bits, 1
 	BRA	_00146_DS_
@@ -360,15 +378,12 @@ _high_priority_interrupt_service:
 	MOVF	(_g + 7), W, B
 	ADDWFC	(_g + 5), F, B
 ;	.line	119; stepperirq.c	if (MOTOR.steps) {
-	MOVFF	(_g + 8), r0x00
-	MOVF	r0x00, W
+	MOVF	(_g + 8), W
 	BZ	_00113_DS_
 ;	.line	120; stepperirq.c	if (MOTOR.nco_hi_bit) { // speed NCO overflowed and we have steps left => generate pulse
 	BNC	_00114_DS_
 ;	.line	121; stepperirq.c	MOTOR.steps--;
-	DECF	r0x00, F
-	MOVF	r0x00, W
-	MOVWF	(_g + 8), B
+	DECF	(_g + 8), F
 ;	.line	122; stepperirq.c	STEP_OUTPUT = 0;// STEP signal = 0 generates a rising edge on next interrupt
 	BCF	_LATDbits, 0
 	BRA	_00114_DS_
@@ -379,16 +394,10 @@ _00113_DS_:
 ;	.line	125; stepperirq.c	MOTOR.has_next = 0;// signals to higher level that we have consumed the next 'step' so to speak
 	BCF	(_g + 9), 0, B
 ;	.line	126; stepperirq.c	MOTOR.steps = MOTOR.next_steps;
-	MOVFF	(_g + 12), r0x00
-	MOVF	r0x00, W
-	MOVWF	(_g + 8), B
+	MOVFF	(_g + 12), (_g + 8)
 ;	.line	127; stepperirq.c	MOTOR.speed = MOTOR.next_speed;
-	MOVFF	(_g + 10), r0x00
-	MOVFF	(_g + 11), r0x01
-	MOVF	r0x00, W
-	MOVWF	(_g + 6), B
-	MOVF	r0x01, W
-	MOVWF	(_g + 7), B
+	MOVFF	(_g + 10), (_g + 6)
+	MOVFF	(_g + 11), (_g + 7)
 ;	.line	130; stepperirq.c	if (MOTOR.next_dir) {
 	BTFSS	(_g + 9), 1, B
 	BRA	_00108_DS_
@@ -408,15 +417,12 @@ _00114_DS_:
 	ADDWFC	(_g + 14), F, B
 	MOVWF	(_g + 14), B
 ;	.line	119; stepperirq.c	if (MOTOR.steps) {
-	MOVFF	(_g + 17), r0x00
-	MOVF	r0x00, W
+	MOVF	(_g + 17), W
 	BZ	_00123_DS_
 ;	.line	120; stepperirq.c	if (MOTOR.nco_hi_bit) { // speed NCO overflowed and we have steps left => generate pulse
 	BNC	_00124_DS_
 ;	.line	121; stepperirq.c	MOTOR.steps--;
-	DECF	r0x00, F
-	MOVF	r0x00, W
-	MOVWF	(_g + 17), B
+	DECF	(_g + 17), F
 ;	.line	122; stepperirq.c	STEP_OUTPUT = 0;// STEP signal = 0 generates a rising edge on next interrupt
 	BCF	_LATDbits, 1
 	BRA	_00124_DS_
@@ -427,16 +433,10 @@ _00123_DS_:
 ;	.line	125; stepperirq.c	MOTOR.has_next = 0;// signals to higher level that we have consumed the next 'step' so to speak
 	BCF	(_g + 18), 0, B
 ;	.line	126; stepperirq.c	MOTOR.steps = MOTOR.next_steps;
-	MOVFF	(_g + 21), r0x00
-	MOVF	r0x00, W
-	MOVWF	(_g + 17), B
+	MOVFF	(_g + 21), (_g + 17)
 ;	.line	127; stepperirq.c	MOTOR.speed = MOTOR.next_speed;
-	MOVFF	(_g + 19), r0x00
-	MOVFF	(_g + 20), r0x01
-	MOVF	r0x00, W
-	MOVWF	(_g + 15), B
-	MOVF	r0x01, W
-	MOVWF	(_g + 16), B
+	MOVFF	(_g + 19), (_g + 15)
+	MOVFF	(_g + 20), (_g + 16)
 ;	.line	130; stepperirq.c	if (MOTOR.next_dir) {
 	BTFSS	(_g + 18), 1, B
 	BRA	_00118_DS_
@@ -455,15 +455,12 @@ _00124_DS_:
 	MOVF	(_g + 25), W, B
 	ADDWFC	(_g + 23), F, B
 ;	.line	119; stepperirq.c	if (MOTOR.steps) {
-	MOVFF	(_g + 26), r0x00
-	MOVF	r0x00, W
+	MOVF	(_g + 26), W
 	BZ	_00133_DS_
 ;	.line	120; stepperirq.c	if (MOTOR.nco_hi_bit) { // speed NCO overflowed and we have steps left => generate pulse
 	BNC	_00134_DS_
 ;	.line	121; stepperirq.c	MOTOR.steps--;
-	DECF	r0x00, F
-	MOVF	r0x00, W
-	MOVWF	(_g + 26), B
+	DECF	(_g + 26), F
 ;	.line	122; stepperirq.c	STEP_OUTPUT = 0;// STEP signal = 0 generates a rising edge on next interrupt
 	BCF	_LATDbits, 2
 	BRA	_00134_DS_
@@ -474,16 +471,10 @@ _00133_DS_:
 ;	.line	125; stepperirq.c	MOTOR.has_next = 0;// signals to higher level that we have consumed the next 'step' so to speak
 	BCF	(_g + 27), 0, B
 ;	.line	126; stepperirq.c	MOTOR.steps = MOTOR.next_steps;
-	MOVFF	(_g + 30), r0x00
-	MOVF	r0x00, W
-	MOVWF	(_g + 26), B
+	MOVFF	(_g + 30), (_g + 26)
 ;	.line	127; stepperirq.c	MOTOR.speed = MOTOR.next_speed;
-	MOVFF	(_g + 28), r0x00
-	MOVFF	(_g + 29), r0x01
-	MOVF	r0x00, W
-	MOVWF	(_g + 24), B
-	MOVF	r0x01, W
-	MOVWF	(_g + 25), B
+	MOVFF	(_g + 28), (_g + 24)
+	MOVFF	(_g + 29), (_g + 25)
 ;	.line	130; stepperirq.c	if (MOTOR.next_dir) {
 	BTFSS	(_g + 27), 1, B
 	BRA	_00128_DS_
@@ -502,15 +493,12 @@ _00134_DS_:
 	MOVF	(_g + 34), W, B
 	ADDWFC	(_g + 32), F, B
 ;	.line	119; stepperirq.c	if (MOTOR.steps) {
-	MOVFF	(_g + 35), r0x00
-	MOVF	r0x00, W
+	MOVF	(_g + 35), W
 	BZ	_00143_DS_
 ;	.line	120; stepperirq.c	if (MOTOR.nco_hi_bit) { // speed NCO overflowed and we have steps left => generate pulse
 	BNC	_00144_DS_
 ;	.line	121; stepperirq.c	MOTOR.steps--;
-	DECF	r0x00, F
-	MOVF	r0x00, W
-	MOVWF	(_g + 35), B
+	DECF	(_g + 35), F
 ;	.line	122; stepperirq.c	STEP_OUTPUT = 0;// STEP signal = 0 generates a rising edge on next interrupt
 	BCF	_LATDbits, 3
 	BRA	_00144_DS_
@@ -521,16 +509,10 @@ _00143_DS_:
 ;	.line	125; stepperirq.c	MOTOR.has_next = 0;// signals to higher level that we have consumed the next 'step' so to speak
 	BCF	(_g + 36), 0, B
 ;	.line	126; stepperirq.c	MOTOR.steps = MOTOR.next_steps;
-	MOVFF	(_g + 39), r0x00
-	MOVF	r0x00, W
-	MOVWF	(_g + 35), B
+	MOVFF	(_g + 39), (_g + 35)
 ;	.line	127; stepperirq.c	MOTOR.speed = MOTOR.next_speed;
-	MOVFF	(_g + 37), r0x00
-	MOVFF	(_g + 38), r0x01
-	MOVF	r0x00, W
-	MOVWF	(_g + 33), B
-	MOVF	r0x01, W
-	MOVWF	(_g + 34), B
+	MOVFF	(_g + 37), (_g + 33)
+	MOVFF	(_g + 38), (_g + 34)
 ;	.line	130; stepperirq.c	if (MOTOR.next_dir) {
 	BTFSS	(_g + 36), 1, B
 	BRA	_00138_DS_
@@ -544,18 +526,8 @@ _00144_DS_:
 ;	.line	136; stepperirq.c	MOTOR.has_next = 1; // FIXME: THIS LINE JUST FOR TESTING
 	BSF	(_g + 36), 0, B
 _00146_DS_:
-;	MOVFF	PREINC1, FSR2L
-;	MOVFF	PREINC1, PCLATU
-;	MOVFF	PREINC1, PCLATH 
-;	MOVFF	PREINC1, FSR0H
-;	MOVFF	PREINC1, FSR0L
-;	MOVFF	PREINC1, PRODH
-;	MOVFF	PREINC1, PRODL
-;	MOVF	PREINC1, W
-;	MOVFF	PREINC1, BSR
-;	MOVFF	PREINC1, STATUS
 ;	.line	157; stepperirq.c	LED_PIN = 0;
-	BCF	_LATBbits, 4
+	BCF	_LATBbits, 4 ;// FIXME: THIS LINE JUST FOR TESTING
 	RETFIE	0x01
 
 

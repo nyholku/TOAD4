@@ -35,6 +35,7 @@
 
 #include "types.h"
 #include "pic18fregs.h"
+#include "stepperirq.h"
 
 // Supported hardware versions
 #define HW3 3
@@ -155,7 +156,13 @@ extern u8 DUMMY_HOME_4;
 
 #if TOAD_HW_VERSION==HW4
 
+// Note that you can't willy nilly re-arrange outputs as there is intricate details
+// in how the step and dir signals are updated in the high priority TMR2 interrupt
+// for example all STEP_n signals must be in the same port and all DIR_n in an
+// other port.
 
+#define STEP_OUTPUT_PORT LATD
+#define STEP_OUTPUT_ALL 0x0f
 
 #define STEP_X 				LATDbits.LATD0
 #define STEP_X_TRIS 		TRISDbits.TRISD0

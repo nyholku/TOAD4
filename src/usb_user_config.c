@@ -6,15 +6,22 @@
 #include "usb_user_config.h"
 #include "usb_hid.h"
 #include "usb_cdc.h"
+#define USE_IAD
 
 // http://lists.apple.com/archives/usb/2010/May/msg00007.html
 __code usb_dev_desc_t device_descriptor = { //
 		sizeof(usb_dev_desc_t),    		// bLength
 				DSC_DEV,                // bDescriptorType
 				0x0200,                 // bcdUSB lsb, bcdUSB msb
+#ifdef USE_IAD
+				0xEF,                   // bDeviceClass
+				0x02,                   // bDeviceSubClass
+				0x01,                   // bDeviceProtocl
+#else
 				0x00,                   // bDeviceClass
-				0x00,                   // bDeviceSubClass
-				0x00,                   // bDeviceProtocl
+				0x00,// bDeviceSubClass
+				0x00,// bDeviceProtocl
+#endif
 				8,                      // bMaxPacketSize
 				USB_VID,				// idVendor
 				USB_PID,				// idProduct
@@ -82,12 +89,7 @@ __code config_struct_t config_descriptor = { //
 						0x01							// Interval
 				}
 
-
-
-
-
-
-};
+		};
 
 // HID report descriptor
 __code unsigned char hid_rpt01[] = { // 28 bytes
@@ -199,9 +201,24 @@ __code config_struct2 config_descriptor2 = { {
 				0x00 }, //
 		};
 
-
 typedef struct {
+	uint8_t bLength; //    0x08
+	uint8_t bDescriptorType; //   0x0B
+	uint8_t bFirstInterface; //   0x00
+	uint8_t bInterfaceCount; //  0x02
+	uint8_t bFunctionClass; //   0x0E
+	uint8_t bFunctionSubClass; //  0x03
+	uint8_t bFunctionProtocol; //  0x00
+	uint8_t iFunction; //    0x04
+
+} usb_iad_desc_t; //
+
+typedef struct { // FIXME naming here, i02 => better use iHID, iCDC1, iCDC2 etc
 	usb_cfg_desc_t cd01;
+
+#ifdef USE_IAD
+	usb_iad_desc_t iad_01;
+#endif
 
 	usb_intf_desc_t i02a00;
 	usb_cdc_header_fn_desc_t cdc_header_fn_i02a00;
@@ -230,8 +247,17 @@ __code config_struct3 config_descriptor3 = { {
 		USBCDC_MAXPOWER / 2, // bMaxPower
 		},
 
-
-
+#ifdef USE_IAD
+		{ 0x08, //		uint8_t  bLength
+				0x0B, //uint8_t  bDescriptorType
+				0, //uint8_t  bFirstInterface
+				2, //uint8_t  bInterfaceCount
+				COMM_INTF, //uint8_t  bFunctionClass
+				ABSTRACT_CONTROL_MODEL, //uint8_t  bFunctionSubClass
+				V25TER, //uint8_t  bFunctionProtocol
+				0, //  uint8_t  iFunction
+		},
+#endif
 
 		/* Interface Descriptor */
 		{ sizeof(usb_intf_desc_t), // Size of this descriptor in unsigned chars
@@ -302,58 +328,50 @@ __code config_struct3 config_descriptor3 = { {
 				USBCDC_BUFFER_LEN,  //
 				0x00 }, //
 
+		{
+		// Interface Descriptor
+				sizeof(usb_intf_desc_t),			// Size of this descriptor in bytes
+				DSC_INTF,		                // INTERFACE descriptor type
+				2,								// Interface Number
+				0,								// Alternate Setting Number
+				2,								// Number of endpoints in this interfacee
+				HID_INTF,						// Class code
+				0,								// Subclass code
+				0,								// Protocol code
+				0,								// Interface string index
+		}, {
+		// HID Class-Specific Descriptor
+				sizeof(usb_hid_desc_t),			// Size of this descriptor in bytes
+				DSC_HID,						// HID descriptor type
+				0x0111,							// HID Spec Release Number in BCD format (1.11)
+				0x00,							// Country Code (0x00 for Not supported)
+				1,					            // Number of class descriptors, see usbcfg.h
+				DSC_RPT,						// Report descriptor type
+				sizeof(hid_rpt01),			   	// Size of the report descriptor
+		}, {
+		// Endpoint Descriptor
+				sizeof(usb_ep_desc_t),				// Size of this descriptor in bytes
+				DSC_EP,		                    // Endpoint Descriptor
+				_EP02_IN,				        // Endpoint Address
+				_INT,						    // Attributes
+				0x40,						    // size
+				0x01,							// Interval
+		}, {
+		// Endpoint Descriptor
+				sizeof(usb_ep_desc_t),				// Size of this descriptor in bytes
+				DSC_EP,		                    // Endpoint Descriptor
+				_EP02_OUT,				        // EndpointAddress
+				_INT,						    // Attributes
+				0x40,						    // size
+				0x01							// Interval
+		},
 
-
-				 {
-								// Interface Descriptor
-										sizeof(usb_intf_desc_t),			// Size of this descriptor in bytes
-										DSC_INTF,		                // INTERFACE descriptor type
-										2,								// Interface Number
-										0,								// Alternate Setting Number
-										2,								// Number of endpoints in this interfacee
-										HID_INTF,						// Class code
-										0,								// Subclass code
-										0,								// Protocol code
-										0,								// Interface string index
-								}, {
-								// HID Class-Specific Descriptor
-										sizeof(usb_hid_desc_t),			// Size of this descriptor in bytes
-										DSC_HID,						// HID descriptor type
-										0x0111,							// HID Spec Release Number in BCD format (1.11)
-										0x00,							// Country Code (0x00 for Not supported)
-										1,					            // Number of class descriptors, see usbcfg.h
-										DSC_RPT,						// Report descriptor type
-										sizeof(hid_rpt01),			   	// Size of the report descriptor
-								}, {
-								// Endpoint Descriptor
-										sizeof(usb_ep_desc_t),				// Size of this descriptor in bytes
-										DSC_EP,		                    // Endpoint Descriptor
-										_EP02_IN,				        // Endpoint Address
-										_INT,						    // Attributes
-										0x40,						    // size
-										0x01,							// Interval
-								}, {
-								// Endpoint Descriptor
-										sizeof(usb_ep_desc_t),				// Size of this descriptor in bytes
-										DSC_EP,		                    // Endpoint Descriptor
-										_EP02_OUT,				        // EndpointAddress
-										_INT,						    // Attributes
-										0x40,						    // size
-										0x01							// Interval
-								},
-
-
-
-
-		};
-
-
+};
 
 codePtr usb_user_get_device_descriptor() {
 	return (codePtr) &device_descriptor;
 
 }
-
 
 codePtr usb_user_get_configuration_descriptor() {
 	return (codePtr) &config_descriptor3;

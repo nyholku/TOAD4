@@ -31,13 +31,9 @@
  */
 
 #ifndef SELFINCLUDE
-
-#include "stepperirq.h"
-
-#include "stepper.h"
+ 
+#include "hi_speed_irq.h"
 #include "toad4.h"
-#include "critical.h"
-#include "usb_cdc.h"
 
 globals_t g = { 0 };
 

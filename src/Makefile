@@ -39,8 +39,9 @@ PATH := ${PATH}:/Users/nyholku/TOAD3/pk2cmd
 TARGET = toad4.hex
 
 # The source files that make up the project go here 
-//SRCS =	 stepper.c cmdQueue.c cmdInterp.c usartirq.c main.c tests.c stepperirq.c usbcdc.c
-SRCS =	 stepper.c stepperirq.c main.c toad4.c usb_hid.c usb_core.c usb_pic_defs.c usb_user_config.c
+//SRCS =	 stepper.c cmdQueue.c cmdInterp.c usartirq.c main.c tests.c usbcdc.c
+//SRCS =	 stepper.c stepperirq.c main.c toad4.c usb_hid.c usb_core.c usb_pic_defs.c usb_user_config.c 
+SRCS =	 stepper.c main.c toad4.c usb_hid.c usb_core.c usb_pic_defs.c usb_user_config.c
 #
  
 # The libraries that are used go here
@@ -80,11 +81,19 @@ OBJDIR = ../obj
 # Compile the C-files
 $(OBJDIR)/%.o: %.c $$(@D)/.f  
 	$(SDCC) -c $(SDCCFLAGS) $< -o $@
-  
+    
+    
+ 
 # Link the compiled files and libraries    
-$(OBJDIR)/$(TARGET): $(addprefix $(OBJDIR)/, $(SRCS:.c=.o)) 
-	$(SDCC) $(SDCCFLAGS) -o $(OBJDIR)/$(TARGET) $(addprefix $(OBJDIR)/, $(SRCS:.c=.o)) $(LIBS)
+$(OBJDIR)/$(TARGET): $(addprefix $(OBJDIR)/, $(SRCS:.c=.o))  $(OBJDIR)/hi_speed_irq.o
+	$(SDCC) $(SDCCFLAGS) -o $(OBJDIR)/$(TARGET) $(addprefix $(OBJDIR)/, $(SRCS:.c=.o)) $(LIBS) $(OBJDIR)/hi_speed_irq.o
 	./load
+	
+	
+$(OBJDIR)/hi_speed_irq.o: hi_speed_irq.asm
+	gpasm -DSTACK_MODEL_SMALL -D__STACK_MODEL_SMALL -o $(OBJDIR)/hi_speed_irq.o -c "hi_speed_irq.asm"
+ 
+
 #
 #-------------------------------------------------------------------------------
 #

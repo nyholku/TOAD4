@@ -40,9 +40,44 @@
 #include "cmdInterp.h"
 #include "critical.h"
 #include "PIC-config.c"
+#include "stepperirq.h"
+#include "toad4.h"
 
 static u8 blink = 0;
 void test_hid();
+
+volatile stepperState __at( 0x0600 ) steppers[NUM_OF_MOTORS];
+volatile cmdQueue __at( 0x0300 ) queues[NUM_OF_MOTORS];
+volatile u8 syncCounter = 0;
+volatile u8 waitInt = 0;
+
+void init_stepperirq_test() {
+	uint8_t i;
+	for (i=0; i<4; i++) {
+		g.motor[i].next_speed = 32000;
+		g.motor[i].next_steps = 200;
+	}
+	steppers[0].accelNCO = 0;
+	queues[0].queue[0].moveDistance = 0;
+}
+
+#pragma save
+#pragma nojtbound
+#pragma nooverlay
+
+void low_priority_interrupt_service() __interrupt(2) {
+	if (INTCONbits.TMR0IF) {  // TIMER0 interrupt processing
+		INTCONbits.TMR0IF = 0; // Clear flag
+	} //End of TIMER0 interrupt processing
+
+	if (PIR2bits.USBIF) { // USB interrupt processing
+		PIR2bits.USBIF = 0;
+		//LED_PIN = !LED_PIN;
+		usbcdc_handler();
+	} // End of USB interrupt processing
+}
+
+#pragma restore
 
 void main(void) {
 	OSCCON = 0x70;
@@ -75,11 +110,21 @@ void main(void) {
 
 	usbcdc_init();
 
-	INTCON2bits.TMR0IP = 1; // Make Timer0  high priority
 
 	INTCON = 0; // Clear interrupt flag bits.
 
-	INTCONbits.TMR0IE = 1; // Enable Timer 0 interrupts
+	//INTCONbits.TMR0IE = 1; // Enable Timer 0 interrupts
+
+	T2CONbits.T2CKPS0 = 0;
+	T2CONbits.T2CKPS1 = 0; // Timer 2 prescaler 1 => 48 MHz / 4  /  1 = 12 Mhz
+	T2CONbits.TOUTPS0 = 0;
+	T2CONbits.TOUTPS1 = 0;
+	T2CONbits.TOUTPS2 = 0;
+	T2CONbits.TOUTPS3 = 0;
+	PR2 = 140; // 12 Mhz / 150 = 80 kHz
+
+	T2CONbits.TMR2ON = 1;
+
 
 	TMR0L = 0;
 	TMR0H = 0;
@@ -92,14 +137,28 @@ void main(void) {
 
 	stepperSetMode(MOTOR_4, 0xF, 0, 0, 0, 0);
 
-	INTCONbits.PEIE = 1;
-	INTCONbits.GIE = 1;
+	init_stepperirq_test();
+
+	RCONbits.IPEN = 1; // enable priorities
+	IPR2bits.USBIP = 0; // USB low priority
+	IPR1bits.TMR2IP = 1; // Timer 2  high priority
+	PIE2bits.USBIE = 1; // Enable USB interrupts
+	PIE1bits.TMR2IE = 1; // Enable Timer 2 interrupts
+	INTCONbits.PEIE = 1; // enable peripheral interrupts
+	INTCONbits.GIE = 1; // global interrupt enable
 
 	LED_PIN = 0;
 
 	while (1) {
+		//init_stepperirq_test();
 		test_hid();
-		}
+	}
 
 
+}
+
+unsigned short x;
+unsigned short y;
+void foo() {
+	x+=y;
 }

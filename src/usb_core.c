@@ -35,11 +35,39 @@
 
 
 
+#pragma udata usbram5 hid_rx_buffer hid_tx_buffer
 volatile uint8_t hid_rx_buffer[64];
 volatile uint8_t hid_tx_buffer[64];
 
-#pragma udata usbram5 hid_rx_buffer hid_tx_buffer
 
+#pragma udata usbram5 setup_packet control_transfer_buffer cdc_rx_buffer cdc_tx_buffer cdcint_buffer
+static unsigned char tx_len = 0;
+static unsigned char rx_idx = 0;
+
+//static volatile unsigned char cdcint_buffer[USBCDC_BUFFER_LEN];
+volatile unsigned char cdc_rx_buffer[8];
+volatile unsigned char cdc_tx_buffer[8];
+static volatile unsigned char cdcint_buffer[8];
+
+
+// DESIGN NOTES:
+
+// differences between CDC / HID
+// -descriptors
+// -EP initialization
+// -buffers
+// -read/write routines
+// -response to class specific stuff
+
+// desirable configuration stuff
+// -descriptors (at least VID/PID and strings)
+// -end points (perhaps)
+// -buffer sizes (maybe not for HID?)
+// -HID and/or CDC support
+
+// question: is it really feasible to separate hid/cdc stuff when we are limited for space?
+// ...further is it good to let the user config the descriptors as that is quite complex?
+// ...or how to provide reasonable defaults and config
 
 
 
@@ -293,7 +321,29 @@ void process_control_transfer(void) {
 
 					// Initialize the endpoints for all interfaces
 					{ // Turn on both in and out for this endpoint
+						// CDC
+						UEP1 = 0x1E;
 
+						ep1_i.ADDR = (int) &cdcint_buffer;
+						ep1_i.STAT = DTS;
+
+						UEP3 = 0x1E;
+
+						ep3_o.CNT = sizeof(cdc_rx_buffer);
+						ep3_o.ADDR = (int) &cdc_rx_buffer;
+						ep3_o.STAT = UOWN | DTSEN; //set up to receive stuff as soon as we get something
+
+						ep3_i.ADDR = (int) &cdc_tx_buffer;
+						ep3_i.STAT = DTS;
+						cdc_tx_buffer[0]='H';
+						cdc_tx_buffer[1]='e';
+						cdc_tx_buffer[2]='l';
+						cdc_tx_buffer[3]='l';
+						cdc_tx_buffer[4]='o';
+						cdc_tx_buffer[5]='!';
+						cdc_tx_buffer[6]='\r';
+						cdc_tx_buffer[7]='\n';
+						// HID
 						UEP2 = 0x1E;
 
 						ep2_o.CNT = sizeof(hid_rx_buffer);

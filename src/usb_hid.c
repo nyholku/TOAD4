@@ -38,7 +38,7 @@
 #include "usb_core.h"
 void test_hid() {
 	if ((ep2_i.STAT & UOWN) == 0) {
-		LED_PIN = !LED_PIN;
+		//LED_PIN = !LED_PIN;
 		hid_tx_buffer[0]++;
 		ep2_i.CNT = 64;
 		if (ep2_i.STAT & DTS)
@@ -57,6 +57,14 @@ void test_hid() {
 		else
 			ep2_o.STAT = UOWN | DTS | DTSEN;
 
+	}
+
+	if (!(ep3_i.STAT & UOWN)) {
+		ep3_i.CNT = 8;
+		if (ep3_i.STAT & DTS)
+			ep3_i.STAT = UOWN | DTSEN;
+		else
+			ep3_i.STAT = UOWN | DTS | DTSEN;
 	}
 
 }

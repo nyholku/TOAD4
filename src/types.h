@@ -55,6 +55,8 @@ typedef unsigned char * va_list;
 #define __data
 #define __wparam
 #define __interrupt(x)
+#define __naked
+#define __shadowregs
 #endif
 
 

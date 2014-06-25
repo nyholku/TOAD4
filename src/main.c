@@ -121,7 +121,8 @@ void main(void) {
 	T2CONbits.TOUTPS1 = 0;
 	T2CONbits.TOUTPS2 = 0;
 	T2CONbits.TOUTPS3 = 0;
-	PR2 = 140; // 12 Mhz / 150 = 80 kHz
+	// PR2 = 82 = 12 Mhz / 82 = 146 kHz
+	PR2 = 100; // 12 Mhz / 120 = 100 kHz
 
 	T2CONbits.TMR2ON = 1;
 

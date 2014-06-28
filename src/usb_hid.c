@@ -36,6 +36,7 @@
 #include "usb_defs.h"
 #include "toad4.h" // DEBUG ONLY
 #include "usb_core.h"
+
 void test_hid() {
 	if ((ep2_i.STAT & UOWN) == 0) {
 		//LED_PIN = !LED_PIN;
@@ -48,10 +49,11 @@ void test_hid() {
 	}
 
 	if (!(ep2_o.STAT & UOWN)) {
+
+
+
 		char i;
 		ep2_o.CNT = 64;
-		for (i = 0; i < 64; ++i)
-			hid_tx_buffer[i] = hid_rx_buffer[i];
 		if (ep2_o.STAT & DTS)
 			ep2_o.STAT = UOWN | DTSEN;
 		else

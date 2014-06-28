@@ -43,15 +43,52 @@
 #include "stepperirq.h"
 #include "toad4.h"
 #include "printft.h"
+#include "usb_core.h"
+#include <string.h> // memcpy
 
 void test_hid();
 
 volatile cmdQueue __at( 0x0300 ) queues[NUM_OF_MOTORS];
 volatile u8 syncCounter = 0;
 volatile u8 waitInt = 0;
+
+
+typedef struct {
+	uint32_t position;
+	uint8_t padding[10];
+}stepper_status_t;
+
+// size 4+10 = 14 * 4= 56 => leaves 8 for other stuff
+
+typedef struct {
+	stepper_status_t steppers[4];
+} toad4_status_t;
+
+
+volatile toad4_status_t toad4_status ;
+
 volatile uint32_t positions[4] = { 0 };
 
+#define update_stepper_state(i)  	\
+		if (!g_stepper_states[i].has_next) {\
+			uint8_t next_steps = 100;\
+			uint8_t next_dir = 1;\
+			if (g_stepper_states[i].next_dir)\
+				toad4_status.steppers[i].position += g_stepper_states[i].next_steps;\
+			else\
+				toad4_status.steppers[i].position -= g_stepper_states[i].next_steps;\
+			g_stepper_states[i].next_speed = 6000;\
+			g_stepper_states[i].next_steps = next_steps;\
+			g_stepper_states[i].next_dir = next_dir;\
+			g_stepper_states[i].has_next = 1;\
+		}\
+
 void init_stepperirq_test() {
+	update_stepper_state(0);
+	update_stepper_state(1);
+	update_stepper_state(2);
+	update_stepper_state(3);
+	/*
 	uint8_t i;
 	if (!g_stepper_states[0].has_next) {
 		uint8_t next_steps = 100;
@@ -217,10 +254,12 @@ void main(void) {
 	while (1) {
 
 		init_stepperirq_test();
-		//test_hid();
+		memcpyram2ram(&hid_tx_buffer,&toad4_status,64);
+
+		test_hid();
 		//LED_PIN=!LED_PIN;
 		if (!usbcdc_wr_busy()) {
-			printft("Hello %d\n",(positions[0]>>16));
+			printft("Hello %d\n",(toad4_status.steppers[0].position));
 		}
 	//	printft("*\n");
 }

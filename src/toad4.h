@@ -54,7 +54,6 @@
 
 #define FW_VERSION_STRING "1.5.2"
 
-
 void initIO();
 
 #if TOAD_HW_VERSION==HW3

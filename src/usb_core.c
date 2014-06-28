@@ -33,22 +33,18 @@
 #include "pic18f4550.h"
 #include "usb_pic_defs.h"
 
-
-
 #pragma udata usbram5 hid_rx_buffer hid_tx_buffer
 volatile uint8_t hid_rx_buffer[64];
 volatile uint8_t hid_tx_buffer[64];
-
 
 #pragma udata usbram5 setup_packet control_transfer_buffer cdc_rx_buffer cdc_tx_buffer cdcint_buffer
 static unsigned char tx_len = 0;
 static unsigned char rx_idx = 0;
 
 //static volatile unsigned char cdcint_buffer[USBCDC_BUFFER_LEN];
-volatile unsigned char cdc_rx_buffer[8];
-volatile unsigned char cdc_tx_buffer[8];
+volatile unsigned char cdc_rx_buffer[16];
+volatile unsigned char cdc_tx_buffer[16];
 static volatile unsigned char cdcint_buffer[8];
-
 
 // DESIGN NOTES:
 
@@ -69,10 +65,6 @@ static volatile unsigned char cdcint_buffer[8];
 // ...further is it good to let the user config the descriptors as that is quite complex?
 // ...or how to provide reasonable defaults and config
 
-
-
-
-
 #define E0SZ 8
 
 // See USB spec chapter 5
@@ -80,7 +72,6 @@ static volatile unsigned char cdcint_buffer[8];
 #define DATA_OUT_STAGE 1
 #define DATA_IN_STAGE  2
 #define STATUS_STAGE   3
-
 
 uint8_t device_state;
 uint8_t device_address;
@@ -92,7 +83,6 @@ static dataPtr data_ptr; // Data to host from RAM
 static codePtr code_ptr; // Data to host from FLASH
 static dataPtr in_ptr; // Data from the host
 static uint8_t dlen; // Number of unsigned chars of data
-
 
 // Put endpoint 0 buffers into dual port RAM
 // Put USB I/O buffers into dual port RAM.
@@ -121,8 +111,6 @@ __code uint16_t string_descriptor_2[] = { // Manufacturer
 		USB_PRODUCT_STRING //
 		};
 
-
-
 void prepare_for_setup_stage(void) {
 	control_stage = SETUP_STAGE;
 	ep0_o.CNT = E0SZ;
@@ -131,8 +119,6 @@ void prepare_for_setup_stage(void) {
 	ep0_i.STAT = 0x00;
 	UCONbits.PKTDIS = 0;
 }
-
-
 
 static void get_descriptor(void) {
 	if (setup_packet.bmrequesttype == 0x80) {
@@ -162,7 +148,6 @@ static void get_descriptor(void) {
 		}
 	}
 }
-
 
 static void get_status(void) {
 	unsigned char recipient = setup_packet.bmrequesttype & 0x1F;
@@ -257,7 +242,6 @@ void in_data_stage(void) {
 		*in_ptr++ = *code_ptr++;
 }
 
-
 // Note: Microchip says to turn off the UOWN bit on the IN direction as
 // soon as possible after detecting that a SETUP has been received.
 void process_control_transfer(void) {
@@ -321,7 +305,7 @@ void process_control_transfer(void) {
 
 					// Initialize the endpoints for all interfaces
 					{ // Turn on both in and out for this endpoint
-						// CDC
+					  // CDC
 						UEP1 = 0x1E;
 
 						ep1_i.ADDR = (int) &cdcint_buffer;
@@ -335,14 +319,14 @@ void process_control_transfer(void) {
 
 						ep3_i.ADDR = (int) &cdc_tx_buffer;
 						ep3_i.STAT = DTS;
-						cdc_tx_buffer[0]='H';
-						cdc_tx_buffer[1]='e';
-						cdc_tx_buffer[2]='l';
-						cdc_tx_buffer[3]='l';
-						cdc_tx_buffer[4]='o';
-						cdc_tx_buffer[5]='!';
-						cdc_tx_buffer[6]='\r';
-						cdc_tx_buffer[7]='\n';
+						cdc_tx_buffer[0] = 'H';
+						cdc_tx_buffer[1] = 'e';
+						cdc_tx_buffer[2] = 'l';
+						cdc_tx_buffer[3] = 'l';
+						cdc_tx_buffer[4] = 'o';
+						cdc_tx_buffer[5] = '!';
+						cdc_tx_buffer[6] = '\r';
+						cdc_tx_buffer[7] = '\n';
 						// HID
 						UEP2 = 0x1E;
 
@@ -585,3 +569,68 @@ void usbcdc_handler(void) {
 		UIRbits.TRNIF = 0;
 	}
 }
+
+
+
+void usbcdc_putchar(char c)__wparam
+{
+	while (usbcdc_wr_busy())
+		/* wait */;
+	cdc_tx_buffer[tx_len++] = c;
+	if (tx_len >= sizeof(cdc_tx_buffer)) {
+		usbcdc_flush();
+	}
+}
+
+char usbcdc_wr_busy() {
+	return (ep3_i.STAT & UOWN) != 0;
+}
+
+unsigned char usbcdc_rd_ready() {
+	if (ep3_o.STAT & UOWN)
+		return 0;
+	if (rx_idx >= ep3_o.CNT) {
+		usbcdc_read();
+		return 0;
+	}
+	return 1;
+}
+
+void usbcdc_write(unsigned char len)__wparam
+{
+	if (len > 0) {
+		ep3_i.CNT = len;
+		if (ep3_i.STAT & DTS)
+			ep3_i.STAT = UOWN | DTSEN;
+		else
+			ep3_i.STAT = UOWN | DTS | DTSEN;
+	}
+}
+
+void usbcdc_flush() {
+	usbcdc_write(tx_len);
+	tx_len = 0;
+
+}
+
+void usbcdc_read() {
+	rx_idx = 0;
+	ep3_o.CNT = sizeof(cdc_rx_buffer);
+	if (ep3_o.STAT & DTS)
+		ep3_o.STAT = UOWN | DTSEN;
+	else
+		ep3_o.STAT = UOWN | DTS | DTSEN;
+}
+
+char usbcdc_getchar() {
+	char c;
+	while (!usbcdc_rd_ready())
+		;
+
+	c = cdc_rx_buffer[rx_idx++];
+	if (rx_idx >= ep3_o.CNT) {
+		usbcdc_read();
+	}
+	return c;
+}
+

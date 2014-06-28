@@ -34,6 +34,7 @@
 #define __STEPPER_H__
 
 #include "types.h"
+#include <stdint.h>
 
 #define QUEUE_CAPACITY 16
 
@@ -131,103 +132,42 @@ typedef __data stepperCmd* pStepperCmd;
 
 typedef __data cmdQueue* pCmdQueue;
 
-typedef struct { // 31 bytes
-	volatile u8 state;
-	volatile u8 home; // value of home input when 'at home'
-	volatile u8 forwardDir;
-	volatile uint16 accelNCO;
-	volatile uint16 speedNCO;
-	volatile uint32 position;
-	volatile uint32 stepCounter; // was 16 bit
-	volatile uint16 motorSpeed;
-	volatile u8 forward;
-	volatile boolean accelerate;
-	volatile uint16 jogFlag;
-	volatile u8 probeArmed;
-	volatile uint16 acceleration;
-	volatile uint32 probePosition;
-	volatile uint16 probeStopSpeed;
-	volatile uint16 probeDeceleration;
-
-	volatile u8 pop;
-	volatile u8 rear;
-	volatile u8 front;
-	volatile u8 size;
-
-	volatile u8 cmd;
-	volatile u8 syncMask;
-	union {
-		struct { // Seek home command params
-			uint32 seekTimeout;
-			uint16 seekLoSpeed;
-			uint16 seekHiSpeed;
-			uint16 seekAcceleration;
-		};
-		struct { // Ramp command
-			boolean rampForward :1;
-			boolean rampAccelerate :1;
-			uint16 rampDistance;
-			uint16 rampAcceleration;
-		};
-		struct { // Jog command params
-			boolean jogForward;
-			uint16 jogPorch;
-			uint16 jogCrawl;
-			uint16 jogAcceleration;
-			uint16 jogLoSpeed;
-			uint16 jogHiSpeed;
-			uint32 jogTimeout;
-		};
-	};
-
-} stepperState;
-
-typedef __data stepperState* pStepperState;
-
-void stepperInit(volatile unsigned char motorNo);
-
-void stepperAbort(u8 motorNo);
-
-u8 stepperGetState(u8 motorNo);
-
-void stepperGo(u8 motorNo);
-
-u8 stepperArmProbe(u8 motorNo, uint16 stopSpeed, uint16 deceleration);
-
-uint32 stepperGetProbePosition(u8 motorNo);
-
-u8 stepperMove(u8 motorNo, int16 distance, uint16 speed);
-
-uint32 stepperGetPosition(u8 motorNo);
-
-void stepperSetPosition(u8 motorNo, uint32 position);
-
-u8 stepperQueueSize(u8 motorNo);
-
-u8 stepperQueueCapacity(u8 motorNo);
-
-void stepperSetMode(u8 motorNo, u8 syncFlags, u8 enable, u8 torque, u8 dir, u8 home);
-
-void stepperSetJogFlag(u8 motorNo, uint16 flag);
-
-u8 stepperGetJogFlag(u8 motorNo);
-
-u8 stepperGetHome(u8 motorNo);
-
-u8 stepperSeekHome(u8 motorNo, uint16 loSpeed, uint16 hiSpeed,
-		uint16 acceleration, uint32 timeout);
-
-u8 stepperJog(u8 motorNo, uint16 loSpeed, uint16 hiSpeed, uint16 acceleration, u8 forward, uint16 porch, uint16 crawl, uint32 timeout);
-
-u8 stepperConfigProbe(u8 input, u8 trigValue);
-
-u8 stepperSetOutput(u8 outputPin, u8 outputState);
-
-extern volatile stepperState __at( 0x0600 ) steppers[];
 extern volatile cmdQueue __at ( 0x0300 ) queues[];
-extern volatile unsigned char rx_timeout;
-extern volatile unsigned char probeTrigValue;
-extern volatile u8 syncCounter;
+
+typedef struct {
+	uint16_t nco; // offset 0
+	uint16_t speed; // offset 2
+	uint16_t next_speed; // offset 4
+	uint8_t steps; // offset 6
+	uint8_t next_steps; // offset 7
+	struct { //offset 8
+		unsigned has_next :1;
+		unsigned next_dir :1;
+		unsigned last_dir :1;
+		unsigned reserve_b3 :1;
+		unsigned reserve_b4 :1;
+		unsigned reserve_b5 :1;
+		unsigned reserve_b6 :1;
+		unsigned reserve_b7 :1;
+	};
+	uint8_t reserve[7];
+} stepper_state_t;
+
+typedef struct {
+	struct { // packing 'booleans' like this into one bit fields allows faster code generation on SDCC
+		unsigned irq_flag :1; // High priority interrupt clears this
+		unsigned reserve_b1;
+		unsigned reserve_b2 :1;
+		unsigned reserve_b3 :1;
+		unsigned reserve_b4 :1;
+		unsigned reserve_b5 :1;
+		unsigned reserve_b6 :1;
+		unsigned reserve_b7 :1;
+	};
+} irq_flags_t;
+
+extern stepper_state_t g_stepper_states[4];
+extern irq_flags_t g_irq_flags;
 
 #endif /* STEPPER_H */
 

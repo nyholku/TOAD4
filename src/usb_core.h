@@ -48,4 +48,16 @@ void usbcdc_init(void);
 void usbcdc_handler(void);
 
 
+char usbcdc_wr_busy();
+
+unsigned char usbcdc_rd_ready();
+
+void usbcdc_write(unsigned char len)__wparam;
+
+void usbcdc_flush();
+
+void usbcdc_read();
+
+char usbcdc_getchar();
+
 #endif /* USB_CORE_H_ */

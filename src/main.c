@@ -42,23 +42,78 @@
 #include "PIC-config.c"
 #include "stepperirq.h"
 #include "toad4.h"
+#include "printft.h"
 
-static u8 blink = 0;
 void test_hid();
 
-volatile stepperState __at( 0x0600 ) steppers[NUM_OF_MOTORS];
 volatile cmdQueue __at( 0x0300 ) queues[NUM_OF_MOTORS];
 volatile u8 syncCounter = 0;
 volatile u8 waitInt = 0;
+volatile uint32_t positions[4] = { 0 };
 
 void init_stepperirq_test() {
 	uint8_t i;
-	for (i=0; i<4; i++) {
-		g.motor[i].next_speed = 6000;
-		g.motor[i].next_steps = 1;
+	if (!g_stepper_states[0].has_next) {
+		uint8_t next_steps = 100;
+		uint8_t next_dir = 1;
+
+		if (g_stepper_states[0].next_dir)
+			positions[0] += g_stepper_states[0].next_steps;
+		else
+			positions[0] -= g_stepper_states[0].next_steps;
+
+		g_stepper_states[0].next_speed = 6000;
+		g_stepper_states[0].next_steps = next_steps;
+		g_stepper_states[0].next_dir = next_dir;
+
+		g_stepper_states[0].has_next = 1;
 	}
-	steppers[0].accelNCO = 0;
-	queues[0].queue[0].moveDistance = 0;
+	for (i = 0; i < 4; i++) {
+	}
+	/*
+	 if (!g_stepper_states[i].has_next) {
+	 uint8_t next_steps = 100;
+	 uint8_t next_dir = 1;
+
+	 LED_PIN = !LED_PIN;
+
+	 if (g_stepper_states[i].next_dir)
+	 positions[i] += g_stepper_states[i].next_steps;
+	 else
+	 positions[i] -= g_stepper_states[i].next_steps;
+
+	 g_stepper_states[i].next_speed = 6000;
+	 g_stepper_states[i].next_steps = next_steps;
+	 g_stepper_states[i].next_dir = next_dir;
+
+	 g_stepper_states[i].has_next = 1;
+	 }
+	 */
+
+}
+
+uint32_t get_position(uint8_t i) {
+	uint8_t delta = g_stepper_states[i].next_steps - g_stepper_states[i].steps;
+	if (g_stepper_states[i].next_dir)
+		return positions[i] + delta;
+	else
+		return positions[i] - delta;
+}
+
+void putchar(char c) __wparam
+{
+	if (c == '\n') {
+		usbcdc_putchar('\r');
+	}
+
+	usbcdc_putchar(c);
+	if (c == '\n')
+		usbcdc_flush();
+}
+
+char getchar() {
+	usbcdc_flush();
+	return usbcdc_getchar();
 }
 
 #pragma save
@@ -79,17 +134,28 @@ void low_priority_interrupt_service() __interrupt(2) {
 
 #pragma restore
 
+uint8_t counter=0;
+
 void main(void) {
 	OSCCON = 0x70;
 	initIO();
+	queues[0].queue[0].moveDistance = 0;
 
-	stepperInit(MOTOR_X);
+	{
+		uint8_t i;
+		for (i = 0; i < 4; i++) {
+			g_stepper_states[i].steps = 0;
+			g_stepper_states[i].speed = 0;
+		}
+	}
 
-	stepperInit(MOTOR_Y);
+//	stepperInit(MOTOR_X);
 
-	stepperInit(MOTOR_Z);
+//	stepperInit(MOTOR_Y);
 
-	stepperInit(MOTOR_4);
+//	stepperInit(MOTOR_Z);
+
+//	stepperInit(MOTOR_4);
 
 	TRISCbits.TRISC6 = 0;
 
@@ -110,7 +176,6 @@ void main(void) {
 
 	usbcdc_init();
 
-
 	INTCON = 0; // Clear interrupt flag bits.
 
 	//INTCONbits.TMR0IE = 1; // Enable Timer 0 interrupts
@@ -121,22 +186,21 @@ void main(void) {
 	T2CONbits.TOUTPS1 = 0;
 	T2CONbits.TOUTPS2 = 0;
 	T2CONbits.TOUTPS3 = 0;
-	// PR2 = 82 = 12 Mhz / 82 = 146 kHz
-	PR2 = 100; // 12 Mhz / 120 = 100 kHz
+	// PR2 = 69 = 12 Mhz / 69 = 174 kHz abs max interrupt frequency
+	PR2 = 100; // 12 Mhz / 100 = 120 kHz
 
 	T2CONbits.TMR2ON = 1;
-
 
 	TMR0L = 0;
 	TMR0H = 0;
 
-	stepperSetMode(MOTOR_X, 0xF, 0, 0, 0, 0);
+///	stepperSetMode(MOTOR_X, 0xF, 0, 0, 0, 0);
 
-	stepperSetMode(MOTOR_Y, 0xF, 0, 0, 0, 0);
+//	stepperSetMode(MOTOR_Y, 0xF, 0, 0, 0, 0);
 
-	stepperSetMode(MOTOR_Z, 0xF, 0, 0, 0, 0);
+//	stepperSetMode(MOTOR_Z, 0xF, 0, 0, 0, 0);
 
-	stepperSetMode(MOTOR_4, 0xF, 0, 0, 0, 0);
+//	stepperSetMode(MOTOR_4, 0xF, 0, 0, 0, 0);
 
 	init_stepperirq_test();
 
@@ -151,15 +215,15 @@ void main(void) {
 	LED_PIN = 0;
 
 	while (1) {
-		//init_stepperirq_test();
-		test_hid();
-	}
 
+		init_stepperirq_test();
+		//test_hid();
+		//LED_PIN=!LED_PIN;
+		if (!usbcdc_wr_busy()) {
+			printft("Hello %d\n",(positions[0]>>16));
+		}
+	//	printft("*\n");
+}
 
 }
 
-unsigned short x;
-unsigned short y;
-void foo() {
-	x+=y;
-}

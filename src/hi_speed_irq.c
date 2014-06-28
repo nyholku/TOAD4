@@ -63,7 +63,6 @@ globals_t g = { 0 };
 void high_priority_interrupt_service() __interrupt(1) {
 	//INLINE_ASM_ISR_PROLOGUE();
 	LED_PIN = 1;
-	// If these are not accesses the linker will complain...
 	if (PIR1bits.TMR2IF) {
 		PIR1bits.TMR2IF = 0;
 

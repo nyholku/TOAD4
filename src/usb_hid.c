@@ -58,7 +58,7 @@ void test_hid() {
 			ep2_o.STAT = UOWN | DTS | DTSEN;
 
 	}
-
+/*
 	if (!(ep3_i.STAT & UOWN)) {
 		ep3_i.CNT = 8;
 		if (ep3_i.STAT & DTS)
@@ -66,5 +66,6 @@ void test_hid() {
 		else
 			ep3_i.STAT = UOWN | DTS | DTSEN;
 	}
+*/
 
 }

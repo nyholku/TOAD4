@@ -1,0 +1,80 @@
+19.11.2011/JKN
+
+
+// DRIVE / HOLD CURRENT SUPPORT
+
+Need to implement automatic current control for the motors.
+Works as follows:
+whenever the move queu for a motor is processed => turn on high current
+whenever the move queue becomes empty => turn on the hold current
+
+options:
+let's support timeouts as 
+DRIVE CURRENT TIMEOUT a period of time after which the drive current drops to low current
+ENABLE TIMEOUT a period of time after which the hold current drops to no current
+configurable:
+a timeout value of 0 implies that the timeout is not used ie the current stays what it
+is.
+Units : seconds at 16 bit => 65000 seconds == 18 hours
+
+
+
+// USB IN MAIN LOOP???
+
+It is possible that the USB service in the timer interrupt disrupts stepping,
+which may not be acceptable. Hence see if we can support this in the mail loop
+
+// DO WE NEED ACCELEREATION (YES WE DO, SO 22 kHz is out)
+
+If acceleration is not used, then we could free some execution time in 
+the interrupt. This would also free some code space.
+
+// CAN WE SUPPORT 22 kHz interrupt rate?
+
+At presen the interrupt rate is 11 kHz but with 3 motors it looked like we
+could support 22 kHz, which would give better ripple characteristics.
+If we leave out the ramping this might be possible still. If not, then
+see we could use regular subroutine instead of self include for each
+stepper inside the interrupt handler as this would use only 1/4 of the
+code space for the interrupt handler.
+
+
+// CHECK FORWARD LOGIC
+
+Forward is increasing position value.
+Homing is defined as driving fast forward until HOME signal activates then crawl backout
+or if at home, driving fast in reverse until HOME signal deactivates, then crawl to until HOME
+avtivates and then crawl back out 
+
+REMEMBER TO REMOVE SYNC MASK FROM MOVE COMMAND ON JAVA SIDE AND ADD IT TO
+CONFIG ON BOTH JAVA AND C SIDE
+
+// IMPLEMENT TIMEOUT
+// 234
+
+holdDelay		number of 20 mSec units until current drops to hold level
+			max 5 seconds, 0 means motor always uses max current
+			
+enableTimeout		number of 20 mSec until motor enable drops
+			max 5 seconds, 0 means motor is always enabled
+			
+
+
+
+// TEST PROBE
+
+// QUEUE SIZE 
+
+How to report that a non MOVE is in progress?
+
+
+// 32 bit time out for seek home
+
+// check the command in progress / queue conditions
+
+// is it ok just to for 'GO'
+// do we realy need the GO command
+
+
+
+

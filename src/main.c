@@ -55,13 +55,14 @@ volatile u8 waitInt = 0;
 
 typedef struct {
 	uint32_t position;
-	uint8_t padding[10];
+	//uint8_t padding[10];
 }stepper_status_t;
 
 // size 4+10 = 14 * 4= 56 => leaves 8 for other stuff
 
 typedef struct {
 	stepper_status_t steppers[4];
+	uint8_t time_stamp;
 } toad4_status_t;
 
 
@@ -160,6 +161,7 @@ char getchar() {
 void low_priority_interrupt_service() __interrupt(2) {
 	if (INTCONbits.TMR0IF) {  // TIMER0 interrupt processing
 		INTCONbits.TMR0IF = 0; // Clear flag
+		toad4_status.time_stamp++;
 	} //End of TIMER0 interrupt processing
 
 	if (PIR2bits.USBIF) { // USB interrupt processing
@@ -201,12 +203,12 @@ void main(void) {
 	// Note Timer 2 would allow faster rates if the interrupt processing can be optimized
 
 	T0CONbits.T0CS = 0; // Internal instruction clock as source for timer 0
-	T0CONbits.PSA = 0;  // Assign prescaler to Timer 0. PSA=1 would be equivalent prescaler 1:1
+	T0CONbits.PSA = 0;  // Enable prescaler for Timer 0
 	T0CONbits.T08BIT = 1; //  8 bit
 
-	T0CONbits.T0PS2 = 0; // Set up prescaler to 1:4 = 001
+	T0CONbits.T0PS2 = 1; // prescaler 1:64 => 1.36533333 ms interrupt period
 	T0CONbits.T0PS1 = 0;
-	T0CONbits.T0PS0 = 1; // se above
+	T0CONbits.T0PS0 = 1;
 
 	T0CONbits.TMR0ON = 1;
 	T0CONbits.T0SE = 1; // high to low (no effect when timer clock coming from instruction clock...)
@@ -215,7 +217,9 @@ void main(void) {
 
 	INTCON = 0; // Clear interrupt flag bits.
 
-	//INTCONbits.TMR0IE = 1; // Enable Timer 0 interrupts
+	TMR0L = 0;
+	TMR0H = 0;
+	INTCONbits.TMR0IE = 1; // Enable Timer 0 interrupts
 
 	T2CONbits.T2CKPS0 = 0;
 	T2CONbits.T2CKPS1 = 0; // Timer 2 prescaler 1 => 48 MHz / 4  /  1 = 12 Mhz
@@ -228,8 +232,6 @@ void main(void) {
 
 	T2CONbits.TMR2ON = 1;
 
-	TMR0L = 0;
-	TMR0H = 0;
 
 ///	stepperSetMode(MOTOR_X, 0xF, 0, 0, 0, 0);
 
@@ -243,6 +245,7 @@ void main(void) {
 
 	RCONbits.IPEN = 1; // enable priorities
 	IPR2bits.USBIP = 0; // USB low priority
+	INTCON2bits.TMR0IP = 0; // Timer 0 low priority
 	IPR1bits.TMR2IP = 1; // Timer 2  high priority
 	PIE2bits.USBIE = 1; // Enable USB interrupts
 	PIE1bits.TMR2IE = 1; // Enable Timer 2 interrupts
@@ -265,4 +268,3 @@ void main(void) {
 }
 
 }
-

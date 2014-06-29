@@ -136,6 +136,7 @@ STEP_GENERATOR_MACRO macro motor,step_out_port,step_out_bit,dir_out_port,dir_out
 	local no_steps_left
 	local pulse_gen_done
 	local next_dir_reverse
+	local no_next
 ;
 ;	MOTOR.nco += MOTOR.speed;
 ;
@@ -168,7 +169,7 @@ no_steps_left:
 ;		} else if (MOTOR.has_next) { // check if there more steps in the queue
 ;
 	BTFSS	(motor + flags), has_next_bit, B
-	BRA	pulse_gen_done
+	BRA	no_next
 ;
 ;	MOTOR.has_next = 0;// signals to higher level that we have consumed the next 'step' so to speak
 ;
@@ -192,7 +193,13 @@ no_steps_left:
 ;
 	BSF	dir_out_port, dir_out_bit
 	BRA	pulse_gen_done
-	
+;
+;	MOTOR.speed = 0; // This stops the nco when there are no steps to do
+;
+no_next:
+	CLRF    (motor + speed + 0), B
+	CLRF    (motor + speed + 1), B
+;
 next_dir_reverse:
 ;
 ;		DIR_OUTPUT=0;

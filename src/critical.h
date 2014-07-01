@@ -33,8 +33,6 @@
 #ifndef CRITICAL_H_
 #define CRITICAL_H_
 
-extern volatile u8 waitInt; // defined in 'stepperirq.c'
-
 #define CRITICAL(CODE) do { \
    static unsigned char __sdcc_iflags; \
    waitInt=1; \

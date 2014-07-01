@@ -30,12 +30,62 @@
  * OF SUCH DAMAGE.
  */
 
-#ifndef TOAD3_H_
-#define TOAD3_H_
+#ifndef TOAD4_H_
+#define TOAD4_H_
 
-#include "types.h"
+#include <stdint.h>
 #include "pic18fregs.h"
-#include "stepperirq.h"
+
+
+
+#define NUMBER_OF_MOTORS 4
+
+
+typedef struct {
+	uint16_t nco; // offset 0
+	uint16_t speed; // offset 2
+	uint16_t next_speed; // offset 4
+	uint8_t steps; // offset 6
+	uint8_t next_steps; // offset 7
+	uint8_t last_steps; // offset 8
+	struct { //offset 9
+		unsigned has_next :1;
+		unsigned next_dir :1;
+		unsigned last_dir :1;
+		unsigned has_last :1;
+		unsigned reserve_b4 :1;
+		unsigned reserve_b5 :1;
+		unsigned reserve_b6 :1;
+		unsigned reserve_b7 :1;
+	};
+	uint8_t queue_size;
+	uint8_t queue_rear;
+	uint8_t queue_front;
+	int32_t position;
+	// size now 16
+	//uint8_t reserve[4];
+} stepper_state_t;
+
+typedef struct {
+	struct { // packing 'booleans' like this into one bit fields allows faster code generation on SDCC
+		unsigned irq_flag :1; // High priority interrupt clears this
+		unsigned reserve_b1;
+		unsigned reserve_b2 :1;
+		unsigned reserve_b3 :1;
+		unsigned reserve_b4 :1;
+		unsigned reserve_b5 :1;
+		unsigned reserve_b6 :1;
+		unsigned reserve_b7 :1;
+	};
+} irq_flags_t;
+
+extern stepper_state_t g_stepper_states[4];
+extern irq_flags_t g_irq_flags;
+
+
+
+
+
 
 // Supported hardware versions
 #define HW3 3

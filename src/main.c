@@ -44,99 +44,39 @@
 #include "toad4.h"
 #include "printft.h"
 #include "usb_core.h"
-#include <string.h> // memcpy
-
+#include "state_machine.h"
+#include "command_queue.h"
+#include <string.h> // memcpyram2ram
 void test_hid();
-
-volatile cmdQueue __at( 0x0300 ) queues[NUM_OF_MOTORS];
-volatile u8 syncCounter = 0;
-volatile u8 waitInt = 0;
-
 
 typedef struct {
 	uint32_t position;
-	//uint8_t padding[10];
-}stepper_status_t;
+//uint8_t padding[10];
+} stepper_status_t;
 
 // size 4+10 = 14 * 4= 56 => leaves 8 for other stuff
 
 typedef struct {
 	stepper_status_t steppers[4];
-	uint8_t time_stamp;
+	uint32_t debug_position;
+	uint8_t debug_last_steps;
 } toad4_status_t;
 
+volatile toad4_status_t g_toad4_status;
 
-volatile toad4_status_t toad4_status ;
-
-volatile uint32_t positions[4] = { 0 };
-
-#define update_stepper_state(i)  	\
+#define UPDATE_STEPPER_STATE(i)  	\
 		if (!g_stepper_states[i].has_next) {\
 			uint8_t next_steps = 100;\
 			uint8_t next_dir = 1;\
 			if (g_stepper_states[i].next_dir)\
-				toad4_status.steppers[i].position += g_stepper_states[i].next_steps;\
+				g_stepper_states[i].position += g_stepper_states[i].next_steps;\
 			else\
-				toad4_status.steppers[i].position -= g_stepper_states[i].next_steps;\
+				g_stepper_states[i].position -= g_stepper_states[i].next_steps;\
 			g_stepper_states[i].next_speed = 6000;\
 			g_stepper_states[i].next_steps = next_steps;\
 			g_stepper_states[i].next_dir = next_dir;\
 			g_stepper_states[i].has_next = 1;\
 		}\
-
-void init_stepperirq_test() {
-	update_stepper_state(0);
-	update_stepper_state(1);
-	update_stepper_state(2);
-	update_stepper_state(3);
-	/*
-	uint8_t i;
-	if (!g_stepper_states[0].has_next) {
-		uint8_t next_steps = 100;
-		uint8_t next_dir = 1;
-
-		if (g_stepper_states[0].next_dir)
-			positions[0] += g_stepper_states[0].next_steps;
-		else
-			positions[0] -= g_stepper_states[0].next_steps;
-
-		g_stepper_states[0].next_speed = 6000;
-		g_stepper_states[0].next_steps = next_steps;
-		g_stepper_states[0].next_dir = next_dir;
-
-		g_stepper_states[0].has_next = 1;
-	}
-	for (i = 0; i < 4; i++) {
-	}
-	/*
-	 if (!g_stepper_states[i].has_next) {
-	 uint8_t next_steps = 100;
-	 uint8_t next_dir = 1;
-
-	 LED_PIN = !LED_PIN;
-
-	 if (g_stepper_states[i].next_dir)
-	 positions[i] += g_stepper_states[i].next_steps;
-	 else
-	 positions[i] -= g_stepper_states[i].next_steps;
-
-	 g_stepper_states[i].next_speed = 6000;
-	 g_stepper_states[i].next_steps = next_steps;
-	 g_stepper_states[i].next_dir = next_dir;
-
-	 g_stepper_states[i].has_next = 1;
-	 }
-	 */
-
-}
-
-uint32_t get_position(uint8_t i) {
-	uint8_t delta = g_stepper_states[i].next_steps - g_stepper_states[i].steps;
-	if (g_stepper_states[i].next_dir)
-		return positions[i] + delta;
-	else
-		return positions[i] - delta;
-}
 
 void putchar(char c) __wparam
 {
@@ -154,14 +94,70 @@ char getchar() {
 	return usbcdc_getchar();
 }
 
+
+#define STEPPER(i) g_stepper_states[i]
+#define UPDATE_QUEUE(i) do {\
+	if (!STEPPER(i).has_next){\
+		if (g_stepper_states[i].last_dir)\
+			STEPPER(i).position += STEPPER(i).last_steps;\
+		else\
+			STEPPER(i).position -= STEPPER(i).last_steps;\
+		STEPPER(i).last_dir = STEPPER(i).next_dir;\
+		STEPPER(i).last_steps = STEPPER(i).next_steps;\
+		if (!QUEUE_EMPTY(i)) {\
+			int16_t distance = QUEUE_FRONT(i)->move_distance;\
+			uint8_t next_steps;\
+			if (distance < 0) {\
+				STEPPER(i).next_dir = 0;\
+				if (distance < -255) \
+					distance = -255;\
+				next_steps = -distance;\
+ 				}\
+ 			else {\
+ 				STEPPER(i).next_dir = 1;\
+ 				if (distance > +255) \
+ 					distance = +255;\
+				next_steps = distance;\
+				}\
+			STEPPER(i).next_steps = next_steps;\
+			STEPPER(i).next_speed = QUEUE_FRONT(i)->move_speed;\
+			if ((QUEUE_FRONT(i)->move_distance -= distance)==0) {\
+				QUEUE_POP(i);\
+			}\
+			STEPPER(i).has_next = 1;\
+		}\
+		else \
+			STEPPER(i).next_steps = 0;\
+		}\
+	}while(0)\
+
+
+#define GET_POSITION(i) \
+	 (g_stepper_states[i].last_dir)?\
+		( g_stepper_states[i].position + (g_stepper_states[i].last_steps - g_stepper_states[i].steps))\
+	:\
+		( g_stepper_states[i].position - (g_stepper_states[i].last_steps - g_stepper_states[i].steps))\
+
+
+static uint8_t syncCounter=0;
+
+
 #pragma save
 #pragma nojtbound
 #pragma nooverlay
 
 void low_priority_interrupt_service() __interrupt(2) {
+	if (PIR1bits.CCP1IF) {
+		PIR1bits.CCP1IF = 0; // FIXME, what about if we the bits gets re-set before we clear it here, do we miss that???
+
+		UPDATE_QUEUE(0);
+		UPDATE_QUEUE(1);
+		UPDATE_QUEUE(2);
+		UPDATE_QUEUE(3);
+	}
 	if (INTCONbits.TMR0IF) {  // TIMER0 interrupt processing
 		INTCONbits.TMR0IF = 0; // Clear flag
-		toad4_status.time_stamp++;
+		update_state_machine();
 	} //End of TIMER0 interrupt processing
 
 	if (PIR2bits.USBIF) { // USB interrupt processing
@@ -173,20 +169,33 @@ void low_priority_interrupt_service() __interrupt(2) {
 
 #pragma restore
 
-uint8_t counter=0;
+int16_t next=16;
+int count = 0;
 
 void main(void) {
 	OSCCON = 0x70;
 	initIO();
-	queues[0].queue[0].moveDistance = 0;
 
 	{
 		uint8_t i;
 		for (i = 0; i < 4; i++) {
+			g_toad4_status.steppers[i].position = 0;
+			g_stepper_states[i].has_last = 0;
+			g_stepper_states[i].has_next = 0;
+			g_stepper_states[i].next_dir = 0;
+			g_stepper_states[i].last_dir = 0;
+			g_stepper_states[i].next_steps = 0;
+			g_stepper_states[i].last_steps = 0;
 			g_stepper_states[i].steps = 0;
 			g_stepper_states[i].speed = 0;
+			g_stepper_states[i].position = 0;
 		}
 	}
+	QUEUE_CLEAR(0);
+	QUEUE_CLEAR(1);
+	QUEUE_CLEAR(2);
+	QUEUE_CLEAR(3);
+
 
 //	stepperInit(MOTOR_X);
 
@@ -232,7 +241,6 @@ void main(void) {
 
 	T2CONbits.TMR2ON = 1;
 
-
 ///	stepperSetMode(MOTOR_X, 0xF, 0, 0, 0, 0);
 
 //	stepperSetMode(MOTOR_Y, 0xF, 0, 0, 0, 0);
@@ -241,7 +249,10 @@ void main(void) {
 
 //	stepperSetMode(MOTOR_4, 0xF, 0, 0, 0, 0);
 
-	init_stepperirq_test();
+	PIR1bits.CCP1IF=1;
+
+	IPR1bits.CCP1IP =0 ; // CCP1 low prioritt
+	PIE1bits.CCP1IE=1; // CCP1 enabled
 
 	RCONbits.IPEN = 1; // enable priorities
 	IPR2bits.USBIP = 0; // USB low priority
@@ -254,17 +265,51 @@ void main(void) {
 
 	LED_PIN = 0;
 
-	while (1) {
+	QUEUE_REAR(0)->move_distance = 0x10;
+	QUEUE_REAR(0)->move_speed = 1;
+	QUEUE_PUSH(0);
 
-		init_stepperirq_test();
-		memcpyram2ram(&hid_tx_buffer,&toad4_status,64);
+	QUEUE_REAR(0)->move_distance = 0x20;
+	QUEUE_REAR(0)->move_speed = 2;
+	QUEUE_PUSH(0);
+
+	QUEUE_REAR(0)->move_distance = 0-0x30;
+	QUEUE_REAR(0)->move_speed = 1;
+	QUEUE_PUSH(0);
+
+	while (1) {
+		if (QUEUE_EMPTY(0)) {
+			count++;
+			QUEUE_REAR(0)->move_distance = next;
+			QUEUE_REAR(0)->move_speed = 4;
+			QUEUE_PUSH(0);
+			next=-next;
+			if (next>0)
+				next++;
+			}
+
+
+
+		//UPDATE_STEPPER_STATE(0);
+		//UPDATE_STEPPER_STATE(1);
+		//UPDATE_STEPPER_STATE(2);
+		//UPDATE_STEPPER_STATE(3);
+
+		g_toad4_status.steppers[0].position = GET_POSITION(0);
+		g_toad4_status.steppers[1].position = GET_POSITION(1);
+		g_toad4_status.steppers[2].position = GET_POSITION(2);
+		g_toad4_status.steppers[3].position = GET_POSITION(3);
+
+		g_toad4_status.debug_position=g_stepper_states[0].position;
+		g_toad4_status.debug_last_steps= count; // g_stepper_states[0].last_steps;
+		memcpyram2ram(&hid_tx_buffer, &g_toad4_status, 64);
 
 		test_hid();
 		//LED_PIN=!LED_PIN;
 		if (!usbcdc_wr_busy()) {
-			printft("Hello %d\n",(toad4_status.steppers[0].position));
+			printft("Hello %d\n", (g_toad4_status.steppers[0].position));
 		}
-	//	printft("*\n");
-}
+		//	printft("*\n");
+	}
 
 }

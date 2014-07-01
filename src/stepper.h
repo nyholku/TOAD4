@@ -36,7 +36,6 @@
 #include "types.h"
 #include <stdint.h>
 
-#define QUEUE_CAPACITY 16
 
 #define STATE_STOP 0
 #define STATE_TIMEOUT 1
@@ -81,93 +80,7 @@
 #define WAIT_HOME 1
 #define WAIT_JOG 2
 
-typedef struct { // size 4 bytes
-	volatile int16 moveDistance;
-	volatile uint16 moveSpeed;
-} stepperCmd;
 
-typedef struct { // size 16 * 4 = 64 bytes
-	volatile stepperCmd queue[QUEUE_CAPACITY];
-} cmdQueue;
-
-typedef __data stepperCmd* pStepperCmd;
-
-#define QUEUE_FULL(qp)  (qp.size >= QUEUE_CAPACITY)
-
-#define QUEUE_EMPTY(qp)  (qp.size == 0)
-
-#define QUEUE_PUSH(qp) {\
-		u8 rear = qp.rear;\
-		if (rear < QUEUE_CAPACITY - 1)\
-			rear++;\
-		else\
-			rear = 0;\
-		qp.rear = rear;\
-		qp.size++;\
-		}\
-
-
-#define QUEUE_POP(qp) {\
-		u8 front = qp.front;\
-		if (front < QUEUE_CAPACITY - 1)\
-			front++;\
-		else\
-			front = 0;\
-		qp.front = front;\
-		qp.size--;\
-	}\
-
-#define QUEUE_REAR(qp) (&QUEUE.queue[qp.rear])
-
-#define QUEUE_FRONT(qp) (&QUEUE.queue[qp.front])
-
-#define QUEUE_SIZE(qp) (qp.size)
-
-#define QUEUE_CLEAR(qp) {\
-		qp.front = syncCounter;\
-		qp.rear = syncCounter;\
-		qp.size = 0;\
-	}\
-
-
-typedef __data cmdQueue* pCmdQueue;
-
-extern volatile cmdQueue __at ( 0x0300 ) queues[];
-
-typedef struct {
-	uint16_t nco; // offset 0
-	uint16_t speed; // offset 2
-	uint16_t next_speed; // offset 4
-	uint8_t steps; // offset 6
-	uint8_t next_steps; // offset 7
-	struct { //offset 8
-		unsigned has_next :1;
-		unsigned next_dir :1;
-		unsigned last_dir :1;
-		unsigned reserve_b3 :1;
-		unsigned reserve_b4 :1;
-		unsigned reserve_b5 :1;
-		unsigned reserve_b6 :1;
-		unsigned reserve_b7 :1;
-	};
-	uint8_t reserve[7];
-} stepper_state_t;
-
-typedef struct {
-	struct { // packing 'booleans' like this into one bit fields allows faster code generation on SDCC
-		unsigned irq_flag :1; // High priority interrupt clears this
-		unsigned reserve_b1;
-		unsigned reserve_b2 :1;
-		unsigned reserve_b3 :1;
-		unsigned reserve_b4 :1;
-		unsigned reserve_b5 :1;
-		unsigned reserve_b6 :1;
-		unsigned reserve_b7 :1;
-	};
-} irq_flags_t;
-
-extern stepper_state_t g_stepper_states[4];
-extern irq_flags_t g_irq_flags;
 
 #endif /* STEPPER_H */
 

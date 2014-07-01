@@ -24,6 +24,7 @@
 	extern	_LATDbits
 	extern	_PIR1bits
 	extern	_LATD
+	extern	_PIR1
 ;
 ;--------------------------------------------------------
 ;	Equates to used internal registers
@@ -55,7 +56,9 @@ PRODH	equ	0xff4
 ;
 	udata 0x600
 ;
-_g_stepper_states	res 64
+#define motor_size 17
+
+_g_stepper_states	res 4*motor_size
 _g_irq_flags 		res 1
 ;
 ;
@@ -63,13 +66,6 @@ _g_irq_flags 		res 1
 ;	Todo
 ;--------------------------------------------------------
 ;
-
-;TODO:
-;define motor at 0x600
-;degine motor stuct in C
-;define syncflags somewhere
-;move _g to udata (save ROM space)
-
 ;
 ;--------------------------------------------------------
 ;	Define values to access the global state
@@ -78,7 +74,6 @@ _g_irq_flags 		res 1
 
 #define _g_irq_flags 0
 
-#define motor_size 16
 #define MOTOR_X (_g_stepper_states + 0 * motor_size)
 #define MOTOR_Y (_g_stepper_states + 1 * motor_size)
 #define MOTOR_Z (_g_stepper_states + 2 * motor_size)
@@ -89,7 +84,7 @@ _g_irq_flags 		res 1
 #define next_speed 4
 #define steps 6
 #define next_steps 7
-#define flags 8
+#define flags 9
 #define has_next_bit 0
 #define next_dir_bit 1
 
@@ -169,11 +164,13 @@ no_steps_left:
 ;		} else if (MOTOR.has_next) { // check if there more steps in the queue
 ;
 	BTFSS	(motor + flags), has_next_bit, B
-	BRA	no_next
+	BRA	pulse_gen_done
 ;
 ;	MOTOR.has_next = 0;// signals to higher level that we have consumed the next 'step' so to speak
 ;
 	BCF	(motor + flags), has_next_bit, B
+;
+	BSF _PIR1, 2   ; // trig the queue processing with sw-interrupt 
 ;
 ;	MOTOR.steps = MOTOR.next_steps;
 ;
@@ -194,12 +191,6 @@ no_steps_left:
 	BSF	dir_out_port, dir_out_bit
 	BRA	pulse_gen_done
 ;
-;	MOTOR.speed = 0; // This stops the nco when there are no steps to do
-;
-no_next:
-	CLRF    (motor + speed + 0), B
-	CLRF    (motor + speed + 1), B
-;
 next_dir_reverse:
 ;
 ;		DIR_OUTPUT=0;
@@ -208,10 +199,6 @@ next_dir_reverse:
 ;
 pulse_gen_done:
 ;
-;	MOTOR.has_next = 1; // FIXME: THIS LINE JUST FOR TESTING
-;
-;	BSF	(motor + flags), has_next_bit, B
-
 	endm
 ;
 ; ---------

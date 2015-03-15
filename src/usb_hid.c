@@ -31,14 +31,18 @@
  */
 
 #include "usb_hid.h"
-#include "pic18f4550.h"
+#include <pic18fregs.h>
 #include "usb_pic_defs.h"
 #include "usb_defs.h"
 #include "toad4.h" // DEBUG ONLY
 #include "usb_core.h"
 
+uint8_t g_hid_i_cnt; // device -> host
+uint8_t g_hid_o_cnt; // host -> device
+
 void test_hid() {
 	if ((ep2_i.STAT & UOWN) == 0) {
+		g_hid_i_cnt++;
 		//LED_PIN = !LED_PIN;
 		hid_tx_buffer[0]++;
 		ep2_i.CNT = 64;
@@ -49,10 +53,7 @@ void test_hid() {
 	}
 
 	if (!(ep2_o.STAT & UOWN)) {
-
-
-
-		char i;
+		g_hid_o_cnt++;
 		ep2_o.CNT = 64;
 		if (ep2_o.STAT & DTS)
 			ep2_o.STAT = UOWN | DTSEN;
@@ -60,14 +61,14 @@ void test_hid() {
 			ep2_o.STAT = UOWN | DTS | DTSEN;
 
 	}
-/*
-	if (!(ep3_i.STAT & UOWN)) {
-		ep3_i.CNT = 8;
-		if (ep3_i.STAT & DTS)
-			ep3_i.STAT = UOWN | DTSEN;
-		else
-			ep3_i.STAT = UOWN | DTS | DTSEN;
-	}
-*/
+	/*
+	 if (!(ep3_i.STAT & UOWN)) {
+	 ep3_i.CNT = 8;
+	 if (ep3_i.STAT & DTS)
+	 ep3_i.STAT = UOWN | DTSEN;
+	 else
+	 ep3_i.STAT = UOWN | DTS | DTSEN;
+	 }
+	 */
 
 }

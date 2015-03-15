@@ -3,7 +3,7 @@
 ; File: hi_speef_irq.asm 
 ;--------------------------------------------------------
 ;
-	list	p=18f4550
+	list	p=18f45k50
 ;
 	radix dec
 ;
@@ -11,7 +11,7 @@
 ; public variables in this module
 ;--------------------------------------------------------
 ;
-	global	_g_irq_flags;
+	global	_g_ready_flags
 	global  _g_stepper_states
 	global	_high_priority_interrupt_service
 ;
@@ -59,7 +59,7 @@ PRODH	equ	0xff4
 #define motor_size 17
 
 _g_stepper_states	res 4*motor_size
-_g_irq_flags 		res 1
+_g_ready_flags 		res 1
 ;
 ;
 ;--------------------------------------------------------
@@ -85,7 +85,7 @@ _g_irq_flags 		res 1
 #define steps 6
 #define next_steps 7
 #define flags 9
-#define has_next_bit 0
+;#define has_next_bit 0
 #define next_dir_bit 1
 
 ;
@@ -121,12 +121,13 @@ _g_irq_flags 		res 1
 ;
 ; This is the 'official'interrupt routine entry point, just a jump to the real stuff really
 ; 
-ivec_0x1_high_priority_interrupt_service: code	0X000008
+;ivec_0x1_high_priority_interrupt_service: code	0X000008
+ivec_0x1_high_priority_interrupt_service: code	0X000808
 	GOTO	_high_priority_interrupt_service
 ;
 ; Here we define a macro to do the actual step pulse generation 
 ;
-STEP_GENERATOR_MACRO macro motor,step_out_port,step_out_bit,dir_out_port,dir_out_bit
+STEP_GENERATOR_MACRO macro motor,ready_bit,step_out_port,step_out_bit,dir_out_port,dir_out_bit
 ;
 	local no_steps_left
 	local pulse_gen_done
@@ -161,14 +162,14 @@ STEP_GENERATOR_MACRO macro motor,step_out_port,step_out_bit,dir_out_port,dir_out
 ;
 no_steps_left:
 ;
-;		} else if (MOTOR.has_next) { // check if there more steps in the queue
+;	check if not ready i.e. queue processing has pushed more our way
 ;
-	BTFSS	(motor + flags), has_next_bit, B
+	BTFSC	_g_ready_flags, ready_bit, B
 	BRA	pulse_gen_done
 ;
-;	MOTOR.has_next = 0;// signals to higher level that we have consumed the next 'step' so to speak
+; Mark this stepper as ready (to receive more work to do)
 ;
-	BCF	(motor + flags), has_next_bit, B
+	BSF	_g_ready_flags, ready_bit, B
 ;
 	BSF _PIR1, 2   ; // trig the queue processing with sw-interrupt 
 ;
@@ -212,7 +213,7 @@ _high_priority_interrupt_service:
 ;
 ;	LED_PIN = 1;
 ;
-	BSF	_LATBbits, 4 ;// FIXME: THIS LINE JUST FOR TESTING
+;;;	BSF	_LATBbits, 4 ;// FIXME: THIS LINE JUST FOR TESTING
 ;
 ; FIXME, basically following is unnecessary also as this is the only hi priority interrupt....
 ;	if (PIR1bits.TMR2IF) {
@@ -229,17 +230,17 @@ _high_priority_interrupt_service:
 	MOVLW	0x0f
 	IORWF	_LATD, F	
 ;
-	STEP_GENERATOR_MACRO MOTOR_X, STEP_X_PORT, STEP_X_BIT, DIR_X_PORT, DIR_X_BIT	
+	STEP_GENERATOR_MACRO MOTOR_X, 0, STEP_X_PORT, STEP_X_BIT, DIR_X_PORT, DIR_X_BIT	
 ;
-	STEP_GENERATOR_MACRO MOTOR_Y, STEP_Y_PORT, STEP_Y_BIT, DIR_Y_PORT, DIR_Y_BIT	
+	STEP_GENERATOR_MACRO MOTOR_Y, 1, STEP_Y_PORT, STEP_Y_BIT, DIR_Y_PORT, DIR_Y_BIT	
 ;
-	STEP_GENERATOR_MACRO MOTOR_Z, STEP_Z_PORT, STEP_Z_BIT, DIR_Z_PORT, DIR_Z_BIT	
+	STEP_GENERATOR_MACRO MOTOR_Z, 2, STEP_Z_PORT, STEP_Z_BIT, DIR_Z_PORT, DIR_Z_BIT	
 ;
-	STEP_GENERATOR_MACRO MOTOR_4, STEP_4_PORT, STEP_4_BIT, DIR_4_PORT, DIR_4_BIT	
+	STEP_GENERATOR_MACRO MOTOR_4, 3, STEP_4_PORT, STEP_4_BIT, DIR_4_PORT, DIR_4_BIT	
 ;
 _00146_DS_:
 ;	.line	157; stepperirq.c	LED_PIN = 0;
-	BCF	_LATBbits, 4 ;// FIXME: THIS LINE JUST FOR TESTING
+;;;	BCF	_LATBbits, 4 ;// FIXME: THIS LINE JUST FOR TESTING
 ;
 ;
 ;

@@ -32,6 +32,8 @@
 #include "toad4.h"
 
 
+uint8_t g_sync_mask;
+
 
 #if TOAD_HW_VERSION==HW3
 

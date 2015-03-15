@@ -30,7 +30,7 @@
  * OF SUCH DAMAGE.
  */
 #include "usb_core.h"
-#include "pic18f4550.h"
+#include <pic18fregs.h>
 #include "usb_pic_defs.h"
 
 #pragma udata usbram5 hid_rx_buffer hid_tx_buffer
@@ -506,7 +506,7 @@ void usbcdc_init() {
 		device_state = POWERED;
 	}
 
-	PIE2bits.USBIE = 1;
+	PIE3bits.USBIE = 1;
 }
 // Main entry point for USB tasks.  Checks interrupts, then checks for transactions.
 void usbcdc_handler(void) {

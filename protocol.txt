@@ -30,7 +30,7 @@ As this is a virtual serial device the baud rate etc is immaterial and no attemp
 be made to set it.
 
 
-Chapter 2 - Protocol Over View
+Chapter 2 - Protocol Overview
 
 The protocol is binary (as opposed to text) for efficiency and space considerations and
 thus it is futile to try to communicate with TOAD4 using a terminal, besides timing
@@ -44,13 +44,13 @@ asked for.
 
 TOAD4 will always wait for a complete message before attempting to interpret it.
 
-If a complete message is not received within 21.7 msec TOAD4 for disregard all
+If a complete message is not received within 21.7 msec TOAD4 will disregard all
 bytes received so far and will start to look for a byte with the MSB set.
 
 If TOOAD4 does not respond or responds badly the master needs to
-keep a pause longer than XX msec and then start with a new complete message.
+keep a pause longer than 30 msec and then start with a new complete message.
 
-This import to synchronize both ends of the communication, both initially
+This is important to synchronize both ends of the communication, both initially
 or in case of an error (note that since this is a virtual serial port on top
 of USB protocol communication errors are very, very rare).
 
@@ -190,7 +190,7 @@ Chapter 6 - Command details
 The following description of the commands are formatted like this:
 
 Command:    Command name
-Id:         The command number (shift left three times and stick to first byte with
+Id:         The command number (shift left three times and stick to the first byte with
             relevant motor number in the three least significant bits.
 Parameters: Short description of the parameters the command takes and their types:
 Returns:    Short description of the return values and their types 
@@ -542,7 +542,7 @@ Description: This command returns the state (0/1) of the given input
 
 
 
-Rather trying to verbally describe this further I think it is best to refer
+Rather than trying to verbally describe this further I think it is best to refer
 to the  Java code for the nitty-gritty details of communicating with TOAD4,
 See the classes in package 'eazycnc.toad4'.
 

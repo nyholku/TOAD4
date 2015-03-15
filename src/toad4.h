@@ -34,12 +34,9 @@
 #define TOAD4_H_
 
 #include <stdint.h>
-#include "pic18fregs.h"
-
-
+#include <pic18fregs.h>
 
 #define NUMBER_OF_MOTORS 4
-
 
 typedef struct {
 	uint16_t nco; // offset 0
@@ -49,7 +46,7 @@ typedef struct {
 	uint8_t next_steps; // offset 7
 	uint8_t last_steps; // offset 8
 	struct { //offset 9
-		unsigned has_next :1;
+		unsigned reserver_b0 :1;
 		unsigned next_dir :1;
 		unsigned last_dir :1;
 		unsigned has_last :1;
@@ -62,14 +59,14 @@ typedef struct {
 	uint8_t queue_rear;
 	uint8_t queue_front;
 	int32_t position;
-	// size now 16
-	//uint8_t reserve[4];
+// size now 16
+//uint8_t reserve[4];
 } stepper_state_t;
 
 typedef struct {
 	struct { // packing 'booleans' like this into one bit fields allows faster code generation on SDCC
 		unsigned irq_flag :1; // High priority interrupt clears this
-		unsigned reserve_b1;
+		unsigned reserve_b1 :1;
 		unsigned reserve_b2 :1;
 		unsigned reserve_b3 :1;
 		unsigned reserve_b4 :1;
@@ -79,12 +76,26 @@ typedef struct {
 	};
 } irq_flags_t;
 
+typedef struct {
+	union {
+		struct { // packing 'booleans' like this into one bit fields allows faster code generation on SDCC
+			unsigned stepper_0 :1; // High priority interrupt clears this
+			unsigned stepper_1 :1;
+			unsigned stepper_2 :1;
+			unsigned stepper_3 :1;
+			unsigned stepper_4 :1;
+			unsigned stepper_5 :1;
+			unsigned stepper_6 :1;
+			unsigned stepper_7 :1;
+		};
+		uint8_t all_steppers;
+	};
+} stepper_flags_t;
+
 extern stepper_state_t g_stepper_states[4];
 extern irq_flags_t g_irq_flags;
-
-
-
-
+extern stepper_flags_t g_ready_flags;
+extern uint8_t g_sync_mask;
 
 
 // Supported hardware versions
@@ -200,7 +211,6 @@ extern u8 DUMMY_HOME_4;
 #define PROBE 			PORTAbits.RA1
 #define PROBE_TRIS	 	TRISAbits.TRISA1
 
-
 #endif
 
 #if TOAD_HW_VERSION==HW4
@@ -298,6 +308,5 @@ extern u8 DUMMY_HOME_4;
 #define COOLANT_TRIS		TRISBbits.TRISB5
 
 #endif
-
 
 #endif /* TOAD3_H_ */

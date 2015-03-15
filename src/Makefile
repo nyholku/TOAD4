@@ -33,7 +33,8 @@
 
 # This is necessary so that pk2cmd (used by 'load' script) is found and for the
 # pk2cmd to find its support files (it seems to search current dir which is wrong)
-PATH := ${PATH}:/Users/nyholku/TOAD3/pk2cmd
+#PATH := ${PATH}:/Users/nyholku/TOAD3/pk2cmd:/usr/local/bin/
+PATH := ${PATH}:/Users/nyholku/TOAD3/pk2cmd:/usr/local/bin/
 
 # The output file name
 TARGET = toad4.hex
@@ -41,17 +42,20 @@ TARGET = toad4.hex
 # The source files that make up the project go here 
 //SRCS =	 stepper.c cmdQueue.c cmdInterp.c usartirq.c main.c tests.c usbcdc.c
 //SRCS =	 stepper.c stepperirq.c main.c toad4.c usb_hid.c usb_core.c usb_pic_defs.c usb_user_config.c 
-SRCS =	 stepper.c main.c toad4.c usb_hid.c usb_core.c usb_pic_defs.c usb_user_config.c printft.c state_machine.c command_queue.c
+SRCS =	  stepper.c main.c toad4.c usb_hid.c usb_core.c usb_pic_defs.c usb_user_config.c printft.c state_machine.c command_queue.c  crt0iz_toad4.c
+# SRCS =	 main2.c 
+# crt0iz_toad4.c
 #
  
 # The libraries that are used go here
-LIBS =  libc18f.lib libio18f4550.lib libm18f.lib libsdcc.lib 
+LIBS =  libc18f.lib libio18f45k50.lib libm18f.lib libsdcc.lib 
 
 # Where to find the compiler
-SDCC = /Users/nyholku/sdcc-3.2.0/bin/sdcc
+SDCC = /Users/nyholku/sdcc-3.4.0/bin/sdcc
 
 # Compiler flags go here
-SDCCFLAGS = -V -L /Users/nyholku/sdcc-3.2.0/share/sdcc/non-free/lib/pic16 -Wl,-m,-s18f4550.lkr -mpic16 -p18f4550 --disable-warning 85 --std-sdcc99 --obanksel=3 --use-non-free
+# --use-crt=crt0.o
+SDCCFLAGS = --no-crt --ivt-loc=0x800 -V -L /Users/nyholku/sdcc-3.4.0/share/sdcc/non-free/lib/pic16 -Wa,-S,0 -Wl,-m,-s18f45k50.lkr -mpic16 -p18f45k50 --disable-warning 85 --std-sdcc99 --obanksel=3 --use-non-free
 
 # Where to store the target/intermediate/temporary/object files
 OBJDIR = ../obj
@@ -80,14 +84,22 @@ OBJDIR = ../obj
 #
 # Compile the C-files
 $(OBJDIR)/%.o: %.c $$(@D)/.f  
+	@echo $(PATH)
 	$(SDCC) -c $(SDCCFLAGS) $< -o $@
     
     
- 
+#	$(SDCC) $(SDCCFLAGS) -o $(OBJDIR)/$(TARGET) $(addprefix $(OBJDIR)/, $(SRCS:.c=.o)) $(LIBS) $(OBJDIR)/hi_speed_irq.o
+
 # Link the compiled files and libraries    
 $(OBJDIR)/$(TARGET): $(addprefix $(OBJDIR)/, $(SRCS:.c=.o))  $(OBJDIR)/hi_speed_irq.o
 	$(SDCC) $(SDCCFLAGS) -o $(OBJDIR)/$(TARGET) $(addprefix $(OBJDIR)/, $(SRCS:.c=.o)) $(LIBS) $(OBJDIR)/hi_speed_irq.o
-	./load
+	../bootloader/encoder/build/encoder -ix ../obj/toad4.hex -ox ../obj/toad4-encoded.hex -e E03389975409007FA500138CF27636E9
+	../bootloader/encoder/build/encoder -ix ../obj/toad4-encoded.hex -ox ../obj/toad4-decoded.hex -d E03389975409007FA500138CF27636E9
+	java -cp ~/FirmwareUpdate/bin:/Users/nyholku//PureJavaHidApi/bin/purejavahidapi.jar:/Users/Nyholku/PureJavaHidApi/lib/jna-4.0.0.jar Test
+
+#	cp ../obj/toad4-encoded.hex ~/FirmwareUpdate/src
+#	cp ../obj/toad4.hex ~/FirmwareUpdate/src
+#	./load
 	
 	
 $(OBJDIR)/hi_speed_irq.o: hi_speed_irq.asm hi_speed_irq.h

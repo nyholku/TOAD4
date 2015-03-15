@@ -30,6 +30,7 @@
  * OF SUCH DAMAGE.
  */
 
+
 #include "types.h"
 #include <pic18fregs.h>
 #include "usb_cdc.h"
@@ -46,58 +47,44 @@
 #include "usb_core.h"
 #include "state_machine.h"
 #include "command_queue.h"
-#include <string.h> // memcpyram2ram
-void test_hid();
+#include <string.h> // memcpyram2ram#include "usb_hid.h"
 
-typedef struct {
-	uint32_t position;
-//uint8_t padding[10];
-} stepper_status_t;
+uint8_t g_hid_i_cnt_0 = 0;
+typedef struct {uint32_t position;//uint8_t padding[10];} stepper_status_t;
 
 // size 4+10 = 14 * 4= 56 => leaves 8 for other stuff
 
 typedef struct {
-	stepper_status_t steppers[4];
+	stepper_status_t steppers[6];
 	uint32_t debug_position;
-	uint8_t debug_last_steps;
+	uint8_t debug[4];
+	uint8_t filler[24];
+	uint8_t printf[8];
 } toad4_status_t;
 
-volatile toad4_status_t g_toad4_status;
-
-#define UPDATE_STEPPER_STATE(i)  	\
-		if (!g_stepper_states[i].has_next) {\
-			uint8_t next_steps = 100;\
-			uint8_t next_dir = 1;\
-			if (g_stepper_states[i].next_dir)\
-				g_stepper_states[i].position += g_stepper_states[i].next_steps;\
-			else\
-				g_stepper_states[i].position -= g_stepper_states[i].next_steps;\
-			g_stepper_states[i].next_speed = 6000;\
-			g_stepper_states[i].next_steps = next_steps;\
-			g_stepper_states[i].next_dir = next_dir;\
-			g_stepper_states[i].has_next = 1;\
-		}\
+static volatile toad4_status_t g_toad4_status;
 
 void putchar(char c) __wparam
 {
-	if (c == '\n') {
-		usbcdc_putchar('\r');
+	uint8_t i = g_toad4_status.printf[0] + 1;
+	if (i < sizeof(g_toad4_status.printf)) {
+		g_toad4_status.printf[i] = c;
+		g_toad4_status.printf[0] = i;
 	}
-
-	usbcdc_putchar(c);
-	if (c == '\n')
-		usbcdc_flush();
 }
 
-char getchar() {
-	usbcdc_flush();
-	return usbcdc_getchar();
-}
-
+//char getchar() {
+//	usbcdc_flush();
+//	return usbcdc_getchar();
+//}
 
 #define STEPPER(i) g_stepper_states[i]
+
+// This is macro because the argument 'i' is constant and by making this to a macro
+// the compiler has ample opportunity to optimize away all to the array indexes
+// and then some more.
 #define UPDATE_QUEUE(i) do {\
-	if (!STEPPER(i).has_next){\
+	if (ready.stepper_##i){\
 		if (g_stepper_states[i].last_dir)\
 			STEPPER(i).position += STEPPER(i).last_steps;\
 		else\
@@ -124,7 +111,7 @@ char getchar() {
 			if ((QUEUE_FRONT(i)->move_distance -= distance)==0) {\
 				QUEUE_POP(i);\
 			}\
-			STEPPER(i).has_next = 1;\
+			g_ready_flags.stepper_##i = 0;\
 		}\
 		else \
 			STEPPER(i).next_steps = 0;\
@@ -138,17 +125,41 @@ char getchar() {
 	:\
 		( g_stepper_states[i].position - (g_stepper_states[i].last_steps - g_stepper_states[i].steps))\
 
+uint8_t g_low_pri_isr_guard;
 
-static uint8_t syncCounter=0;
+int32_t get_position(uint8_t i) {
+	uint8_t stp;
+	uint8_t dlt;
+	uint32_t pos;
+	uint8_t dir;
+	do {
+		stp = g_low_pri_isr_guard;
+		dlt = g_stepper_states[i].last_steps - g_stepper_states[i].steps;
+		pos = g_stepper_states[i].position;
+		dir = g_stepper_states[i].last_dir;
+	} while (stp != g_low_pri_isr_guard);
+	if (dir)
+		pos += dlt;
+	else
+		pos -= dlt;
+	return pos;
+}
+static uint8_t syncCounter = 0;
 
+stepper_flags_t ready;
 
 #pragma save
 #pragma nojtbound
 #pragma nooverlay
 
 void low_priority_interrupt_service() __interrupt(2) {
+	g_low_pri_isr_guard++;
 	if (PIR1bits.CCP1IF) {
-		PIR1bits.CCP1IF = 0; // FIXME, what about if we the bits gets re-set before we clear it here, do we miss that???
+		PIR1bits.CCP1IF = 0;
+		ready.all_steppers = (
+				((g_ready_flags.all_steppers & g_sync_mask) == g_sync_mask) ?
+						g_sync_mask : 0) | //
+				(g_ready_flags.all_steppers & ~g_sync_mask);
 
 		UPDATE_QUEUE(0);
 		UPDATE_QUEUE(1);
@@ -156,12 +167,12 @@ void low_priority_interrupt_service() __interrupt(2) {
 		UPDATE_QUEUE(3);
 	}
 	if (INTCONbits.TMR0IF) {  // TIMER0 interrupt processing
-		INTCONbits.TMR0IF = 0; // Clear flag
+		INTCONbits.TMR0IF = 0;  // Clear flag
 		update_state_machine();
 	} //End of TIMER0 interrupt processing
 
-	if (PIR2bits.USBIF) { // USB interrupt processing
-		PIR2bits.USBIF = 0;
+	if (PIR3bits.USBIF) { // USB interrupt processing
+		PIR3bits.USBIF = 0;
 		//LED_PIN = !LED_PIN;
 		usbcdc_handler();
 	} // End of USB interrupt processing
@@ -169,19 +180,41 @@ void low_priority_interrupt_service() __interrupt(2) {
 
 #pragma restore
 
-int16_t next=16;
+int16_t next = 16;
 int count = 0;
 
+/*
+ void _entry (void) __naked __interrupt 0;
+
+ void _entry (void) __naked __interrupt 0
+ {
+ __asm
+ goto    _main
+ __endasm;
+ }
+ */
+
+
+void enterBootloader() {
+    __asm__ (" goto 0x0016\n");
+}
+
+#pragma config XINST=OFF
+
+int counter = 0;
+
 void main(void) {
-	OSCCON = 0x70;
+
+
+//	OSCCON = 0x70;
 	initIO();
 
 	{
 		uint8_t i;
+		g_ready_flags.all_steppers = 0x0F;
 		for (i = 0; i < 4; i++) {
 			g_toad4_status.steppers[i].position = 0;
 			g_stepper_states[i].has_last = 0;
-			g_stepper_states[i].has_next = 0;
 			g_stepper_states[i].next_dir = 0;
 			g_stepper_states[i].last_dir = 0;
 			g_stepper_states[i].next_steps = 0;
@@ -196,7 +229,6 @@ void main(void) {
 	QUEUE_CLEAR(2);
 	QUEUE_CLEAR(3);
 
-
 //	stepperInit(MOTOR_X);
 
 //	stepperInit(MOTOR_Y);
@@ -207,9 +239,9 @@ void main(void) {
 
 	TRISCbits.TRISC6 = 0;
 
-	// Timer 0 interrupt rate = ((48 000 000 MHz / 4) / 4) / 256 = 11 718.7 Hz
-	// rxtimeout = 255/11718.75 = 21.7 msec
-	// Note Timer 2 would allow faster rates if the interrupt processing can be optimized
+// Timer 0 interrupt rate = ((48 000 000 MHz / 4) / 4) / 256 = 11 718.7 Hz
+// rxtimeout = 255/11718.75 = 21.7 msec
+// Note Timer 2 would allow faster rates if the interrupt processing can be optimized
 
 	T0CONbits.T0CS = 0; // Internal instruction clock as source for timer 0
 	T0CONbits.PSA = 0;  // Enable prescaler for Timer 0
@@ -228,15 +260,16 @@ void main(void) {
 
 	TMR0L = 0;
 	TMR0H = 0;
-	INTCONbits.TMR0IE = 1; // Enable Timer 0 interrupts
 
 	T2CONbits.T2CKPS0 = 0;
 	T2CONbits.T2CKPS1 = 0; // Timer 2 prescaler 1 => 48 MHz / 4  /  1 = 12 Mhz
-	T2CONbits.TOUTPS0 = 0;
+	/*
+	T2CONbits.TOUTPS0 = 0; CEHCK
 	T2CONbits.TOUTPS1 = 0;
 	T2CONbits.TOUTPS2 = 0;
 	T2CONbits.TOUTPS3 = 0;
-	// PR2 = 69 = 12 Mhz / 69 = 174 kHz abs max interrupt frequency
+	*/
+// PR2 = 69 = 12 Mhz / 69 = 174 kHz abs max interrupt frequency
 	PR2 = 100; // 12 Mhz / 100 = 120 kHz
 
 	T2CONbits.TMR2ON = 1;
@@ -249,67 +282,134 @@ void main(void) {
 
 //	stepperSetMode(MOTOR_4, 0xF, 0, 0, 0, 0);
 
-	PIR1bits.CCP1IF=1;
+	PIR1bits.CCP1IF = 1;
 
-	IPR1bits.CCP1IP =0 ; // CCP1 low prioritt
-	PIE1bits.CCP1IE=1; // CCP1 enabled
+	IPR1bits.CCP1IP = 0; // CCP1 low priority
 
 	RCONbits.IPEN = 1; // enable priorities
-	IPR2bits.USBIP = 0; // USB low priority
+	IPR3bits.USBIP = 0; // USB low priority
 	INTCON2bits.TMR0IP = 0; // Timer 0 low priority
 	IPR1bits.TMR2IP = 1; // Timer 2  high priority
-	PIE2bits.USBIE = 1; // Enable USB interrupts
+
+	INTCON = 0;
+	INTCON2 = 0;
+	INTCON3 = 0;
+	PIE1 = 0;
+	PIE2 = 0;
+
+	PIE1bits.CCP1IE = 1; // CCP1 enabled
+	PIE3bits.USBIE = 1; // Enable USB interrupts
 	PIE1bits.TMR2IE = 1; // Enable Timer 2 interrupts
+	INTCONbits.TMR0IE = 1; // Enable Timer 0 interrupts
+
+	LED_PIN = 0;
+
 	INTCONbits.PEIE = 1; // enable peripheral interrupts
 	INTCONbits.GIE = 1; // global interrupt enable
 
-	LED_PIN = 0;
+	g_sync_mask = 0x03;
 
 	QUEUE_REAR(0)->move_distance = 0x10;
 	QUEUE_REAR(0)->move_speed = 1;
 	QUEUE_PUSH(0);
 
+	QUEUE_REAR(1)->move_distance = 0x20;
+	QUEUE_REAR(1)->move_speed = 1;
+	QUEUE_PUSH(1);
+
+	QUEUE_REAR(1)->move_distance = 0x20;
+	QUEUE_REAR(1)->move_speed = 1;
+	QUEUE_PUSH(1);
+
 	QUEUE_REAR(0)->move_distance = 0x20;
 	QUEUE_REAR(0)->move_speed = 2;
 	QUEUE_PUSH(0);
 
-	QUEUE_REAR(0)->move_distance = 0-0x30;
+	QUEUE_REAR(0)->move_distance = 0 - 0x30;
 	QUEUE_REAR(0)->move_speed = 1;
 	QUEUE_PUSH(0);
 
 	while (1) {
-		if (QUEUE_EMPTY(0)) {
+		if (1 & QUEUE_EMPTY(0)) {
 			count++;
 			QUEUE_REAR(0)->move_distance = next;
 			QUEUE_REAR(0)->move_speed = 4;
 			QUEUE_PUSH(0);
-			next=-next;
-			if (next>0)
+			next = -next;
+			if (next > 0)
 				next++;
-			}
-
-
+		}
 
 		//UPDATE_STEPPER_STATE(0);
 		//UPDATE_STEPPER_STATE(1);
 		//UPDATE_STEPPER_STATE(2);
 		//UPDATE_STEPPER_STATE(3);
 
-		g_toad4_status.steppers[0].position = GET_POSITION(0);
-		g_toad4_status.steppers[1].position = GET_POSITION(1);
-		g_toad4_status.steppers[2].position = GET_POSITION(2);
-		g_toad4_status.steppers[3].position = GET_POSITION(3);
+		g_toad4_status.steppers[0].position = get_position(0);//GET_POSITION(0);
+		g_toad4_status.steppers[1].position = get_position(1);//GET_POSITION(1);
+		g_toad4_status.steppers[2].position = get_position(2);//GET_POSITION(2);
+		g_toad4_status.steppers[3].position = get_position(3);//GET_POSITION(3);
 
-		g_toad4_status.debug_position=g_stepper_states[0].position;
-		g_toad4_status.debug_last_steps= count; // g_stepper_states[0].last_steps;
+		g_toad4_status.debug_position = -1;	//g_stepper_states[0].position;
+		g_toad4_status.debug[0] = ready.all_steppers; // g_stepper_states[0].last_steps;
+		g_toad4_status.debug[1] = g_sync_mask; // g_stepper_states[0].last_steps;
+		g_toad4_status.debug[2] = g_ready_flags.all_steppers; // g_stepper_states[0].last_steps;
+
 		memcpyram2ram(&hid_tx_buffer, &g_toad4_status, 64);
+		//memcpyram2ram(&g_toad4_status, &g_toad4_status, 64);
+
+#if 0
+		while (1) {
+			volatile unsigned long i;
+			for (i = 0; i<200000;)
+			i++;
+			LED_PIN = !LED_PIN;
+			memcpyram2ram(&g_toad4_status, &g_toad4_status, 64);
+		}
+#endif
 
 		test_hid();
-		//LED_PIN=!LED_PIN;
-		if (!usbcdc_wr_busy()) {
-			printft("Hello %d\n", (g_toad4_status.steppers[0].position));
+#if 1
+		counter++;
+
+		if (counter & 128)
+			LED_PIN = 1;
+		else
+			LED_PIN = 0;
+#endif
+
+		if (hid_rx_buffer[0]==0x55) {
+			hid_rx_buffer[0]=0;
+			enterBootloader();
 		}
+
+
+		if (g_hid_i_cnt_0 != g_hid_i_cnt) {
+			g_hid_i_cnt_0 = g_hid_i_cnt;
+			g_toad4_status.printf[0] = 0;
+			printft("Hello!\n" );
+
+		}
+
+//		if (!usbcdc_wr_busy()) {
+//			int t=g_toad4_status.steppers[0].position;
+//			printft("Hello %d\n",t );
+//		}
 		//	printft("*\n");
 	}
 
 }
+
+/*
+ * TODO NEXT:
+ * -reprogram without reset
+ * -miksi testikortti ei toimi?
+ * -siirry PIC18F45K50
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ */

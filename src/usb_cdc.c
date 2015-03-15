@@ -31,7 +31,7 @@
  */
 
 #include "types.h"
-#include "pic18f4550.h"
+#include "pic18f45k50.h"
 #include "usb_cdc.h"
 #include "usb_pic_defs.h"
 #include "usb_cdc_defs.h"
@@ -624,7 +624,7 @@ void usbcdc_init() {
 		usbcdc_device_state = POWERED;
 	}
 
-	PIE2bits.USBIE = 1;
+	PIE3bits.USBIE = 1;
 }
 // Main entry point for USB tasks.  Checks interrupts, then checks for transactions.
 void usbcdc_handler(void) {

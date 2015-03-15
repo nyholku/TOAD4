@@ -34,7 +34,7 @@
 #include "cmdinterp.h"
 #include "stepper.h"
 #include "toad4.h"
-#include "usbcdc.h"
+#include "usb_cdc.h"
 
 __code char version[16] = FW_VERSION_STRING"-"HW_VERSION_STRING;
 

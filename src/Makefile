@@ -47,10 +47,10 @@ SRCS =	 stepper.c cmdInterp.c stepperirq.c main.c usbcdc.c toad4.c
 LIBS =  libc18f.lib libio18f4550.lib libm18f.lib libsdcc.lib 
 
 # Where to find the compiler
-SDCC = /Users/nyholku/sdcc-3.2.0/bin/sdcc
+SDCC = /Users/nyholku/sdcc-3.4.0/bin/sdcc
 
 # Compiler flags go here
-SDCCFLAGS = -V -L /Users/nyholku/sdcc-3.2.0/share/sdcc/non-free/lib/pic16 -Wl,-m,-s18f4550.lkr -mpic16 -p18f4550 --disable-warning 85 --std-sdcc99 --obanksel=3 --use-non-free
+SDCCFLAGS = -V -L /Users/nyholku/sdcc-3.4.0/share/sdcc/non-free/lib/pic16 -Wl,-m,-s18f4550.lkr -mpic16 -p18f4550 --disable-warning 85 --std-sdcc99 --obanksel=3 --use-non-free
 
 # Where to store the target/intermediate/temporary/object files
 OBJDIR = ../obj

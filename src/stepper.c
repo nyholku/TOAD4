@@ -49,7 +49,7 @@ volatile unsigned char probeTrigValue = 0;
 	do { CODE; } while (0); \
 	} while(0)
 
-void stepperInit(u8 motorNo) {
+void stepperInit(volatile unsigned char motorNo) {
 	//	 __data stepperState* stepper=&steppers[motorNo];
 	USE_STEPPER(
 			//uint32 pos=STEPPER.position; // don't lose the position on reset

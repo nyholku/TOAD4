@@ -39,7 +39,7 @@
 #include "toad4.h"
 #include "cmdInterp.h"
 #include "critical.h"
-#include "PIC-config.c"
+#include "pic-config.c"
 
 static u8 blink = 0;
 

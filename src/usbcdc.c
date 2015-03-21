@@ -483,7 +483,8 @@ void process_control_transfer(void) {
 					request_handled = 1;
 					code_ptr = (codePtr) (&const_values_0x00_0x00);
 					dlen = 1;
-                } else if ((request == SET_INTERFACE) || (request == SET_LINE_CODING) || (request == SET_CONTROL_LINE_STATE)) {
+					// || (request == SET_CONTROL_LINE_STATE)
+                } else if ((request == SET_INTERFACE) || (request == SET_LINE_CODING)) {
                     
 					// No support for alternate interfaces - just ignore.
                     

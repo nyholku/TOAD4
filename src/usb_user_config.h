@@ -14,7 +14,7 @@
 #define USB_PID 0x6020
 
 #define USB_MANUFACTURER_STRING  'S', 'p', 'a', 'r', 'e', 'T', 'i', 'm', 'e', 'L', 'a', 'b', 's'
-#define USB_PRODUCT_STRING 'T', 'O', 'A', 'D', '4'
+#define USB_PRODUCT_STRING 'T', 'O', 'A', 'D', '4' , '+'
 
 codePtr usb_user_get_device_descriptor();
 codePtr usb_user_get_configuration_descriptor();

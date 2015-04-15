@@ -36,9 +36,21 @@
 #include "usb_defs.h"
 #include "usb_user_config.h"
 
+typedef struct {
+	union {
+		uint8_t uint8[64];
+		uint16_t uint16[32];
+		uint32_t uint32[16];
+		int8_t int8[64];
+		int16_t int16[32];
+		int32_t int32[16];
+	};
+} hid_buffer_t;
 
-extern volatile uint8_t hid_rx_buffer[64];
-extern volatile uint8_t hid_tx_buffer[64];
+
+
+extern volatile hid_buffer_t hid_rx_buffer;
+extern volatile hid_buffer_t hid_tx_buffer;
 
 extern uint8_t device_state;
 extern uint8_t device_address;

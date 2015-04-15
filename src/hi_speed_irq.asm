@@ -207,7 +207,7 @@ pulse_gen_done:
 S_stepperirq__high_priority_interrupt_service	code
 ;
 _high_priority_interrupt_service:
-
+;	MOVFF   BSR, POSTDEC1
 ;
 	BANKSEL	_g_stepper_states;
 ;
@@ -244,6 +244,7 @@ _00146_DS_:
 ;
 ;
 ;
+;	MOVFF   PREINC1, BSR
 	RETFIE	0x01
 ;
 	end

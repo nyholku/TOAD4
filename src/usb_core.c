@@ -34,8 +34,12 @@
 #include "usb_pic_defs.h"
 
 #pragma udata usbram5 hid_rx_buffer hid_tx_buffer
-volatile uint8_t hid_rx_buffer[64];
-volatile uint8_t hid_tx_buffer[64];
+
+
+
+
+volatile hid_buffer_t hid_rx_buffer;
+volatile hid_buffer_t hid_tx_buffer;
 
 #pragma udata usbram5 setup_packet control_transfer_buffer cdc_rx_buffer cdc_tx_buffer cdcint_buffer
 static unsigned char tx_len = 0;

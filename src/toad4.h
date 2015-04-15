@@ -38,7 +38,7 @@
 
 #define NUMBER_OF_MOTORS 4
 
-typedef struct {
+typedef volatile struct {
 	uint16_t nco; // offset 0
 	uint16_t speed; // offset 2
 	uint16_t next_speed; // offset 4
@@ -55,15 +55,15 @@ typedef struct {
 		unsigned reserve_b6 :1;
 		unsigned reserve_b7 :1;
 	};
-	uint8_t queue_size;
-	uint8_t queue_rear;
-	uint8_t queue_front;
-	int32_t position;
-// size now 16
+	uint8_t queue_size; // offset 10
+	uint8_t queue_rear; // offset 11
+	uint8_t queue_front; // offset 12
+	int32_t position; // offset 13
+// size now 17
 //uint8_t reserve[4];
 } stepper_state_t;
 
-typedef struct {
+typedef volatile struct {
 	struct { // packing 'booleans' like this into one bit fields allows faster code generation on SDCC
 		unsigned irq_flag :1; // High priority interrupt clears this
 		unsigned reserve_b1 :1;
@@ -76,7 +76,7 @@ typedef struct {
 	};
 } irq_flags_t;
 
-typedef struct {
+typedef volatile struct {
 	union {
 		struct { // packing 'booleans' like this into one bit fields allows faster code generation on SDCC
 			unsigned stepper_0 :1; // High priority interrupt clears this
@@ -92,10 +92,10 @@ typedef struct {
 	};
 } stepper_flags_t;
 
-extern stepper_state_t g_stepper_states[4];
-extern irq_flags_t g_irq_flags;
-extern stepper_flags_t g_ready_flags;
-extern uint8_t g_sync_mask;
+extern volatile stepper_state_t g_stepper_states[4];
+extern volatile irq_flags_t g_irq_flags;
+extern volatile stepper_flags_t g_ready_flags;
+extern volatile uint8_t g_sync_mask;
 
 
 // Supported hardware versions

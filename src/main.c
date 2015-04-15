@@ -50,15 +50,15 @@
 #include <string.h> // memcpyram2ram#include "usb_hid.h"
 
 uint8_t g_hid_i_cnt_0 = 0;
-typedef struct {uint32_t position;//uint8_t padding[10];} stepper_status_t;
+typedef struct {int32_t position;//uint8_t padding[10];} stepper_status_t;
 
 // size 4+10 = 14 * 4= 56 => leaves 8 for other stuff
 
 typedef struct {
 	stepper_status_t steppers[6];
+	uint8_t filler[24];
 	uint32_t debug_position;
 	uint8_t debug[4];
-	uint8_t filler[24];
 	uint8_t printf[8];
 } toad4_status_t;
 
@@ -80,17 +80,21 @@ void putchar(char c) __wparam
 
 #define STEPPER(i) g_stepper_states[i]
 
-// This is macro because the argument 'i' is constant and by making this to a macro
+// This is macro because the argument 'i' is constant and by making this into a macro
 // the compiler has ample opportunity to optimize away all to the array indexes
 // and then some more.
 #define UPDATE_QUEUE(i) do {\
-	if (ready.stepper_##i){\
-		if (g_stepper_states[i].last_dir)\
-			STEPPER(i).position += STEPPER(i).last_steps;\
-		else\
-			STEPPER(i).position -= STEPPER(i).last_steps;\
-		STEPPER(i).last_dir = STEPPER(i).next_dir;\
-		STEPPER(i).last_steps = STEPPER(i).next_steps;\
+	if (g_ready_flags.stepper_##i){\
+		if (!g_ready_flags2.stepper_##i) {\
+			g_ready_flags2.stepper_##i = 1;\
+			if (i==1) g_low_pri_isr_guard++;\
+			if (STEPPER(i).last_dir)\
+				STEPPER(i).position += STEPPER(i).last_steps;\
+			else\
+				STEPPER(i).position -= STEPPER(i).last_steps;\
+			STEPPER(i).last_dir = STEPPER(i).next_dir;\
+			STEPPER(i).last_steps = STEPPER(i).next_steps;\
+			}\
 		if (!QUEUE_EMPTY(i)) {\
 			int16_t distance = QUEUE_FRONT(i)->move_distance;\
 			uint8_t next_steps;\
@@ -108,29 +112,23 @@ void putchar(char c) __wparam
 				}\
 			STEPPER(i).next_steps = next_steps;\
 			STEPPER(i).next_speed = QUEUE_FRONT(i)->move_speed;\
-			if ((QUEUE_FRONT(i)->move_distance -= distance)==0) {\
+			if ((QUEUE_FRONT(i)->move_distance -= distance)==0)\
 				QUEUE_POP(i);\
-			}\
+			g_ready_flags2.stepper_##i = 0;\
 			g_ready_flags.stepper_##i = 0;\
-		}\
-		else \
-			STEPPER(i).next_steps = 0;\
+			}\
 		}\
 	}while(0)\
 
+volatile uint8_t g_low_pri_isr_guard;
 
-#define GET_POSITION(i) \
-	 (g_stepper_states[i].last_dir)?\
-		( g_stepper_states[i].position + (g_stepper_states[i].last_steps - g_stepper_states[i].steps))\
-	:\
-		( g_stepper_states[i].position - (g_stepper_states[i].last_steps - g_stepper_states[i].steps))\
-
-uint8_t g_low_pri_isr_guard;
+#pragma save
+#pragma nooverlay
 
 int32_t get_position(uint8_t i) {
 	uint8_t stp;
 	uint8_t dlt;
-	uint32_t pos;
+	int32_t pos;
 	uint8_t dir;
 	do {
 		stp = g_low_pri_isr_guard;
@@ -144,17 +142,20 @@ int32_t get_position(uint8_t i) {
 		pos -= dlt;
 	return pos;
 }
+#pragma restore
+
 static uint8_t syncCounter = 0;
 
 stepper_flags_t ready;
+stepper_flags_t g_ready_flags2={0};
 
 #pragma save
 #pragma nojtbound
 #pragma nooverlay
 
 void low_priority_interrupt_service() __interrupt(2) {
-	g_low_pri_isr_guard++;
 	if (PIR1bits.CCP1IF) {
+		//g_low_pri_isr_guard++;
 		PIR1bits.CCP1IF = 0;
 		ready.all_steppers = (
 				((g_ready_flags.all_steppers & g_sync_mask) == g_sync_mask) ?
@@ -165,7 +166,8 @@ void low_priority_interrupt_service() __interrupt(2) {
 		UPDATE_QUEUE(1);
 		UPDATE_QUEUE(2);
 		UPDATE_QUEUE(3);
-	}
+	} // End of 'software' interrupt processing
+
 	if (INTCONbits.TMR0IF) {  // TIMER0 interrupt processing
 		INTCONbits.TMR0IF = 0;  // Clear flag
 		update_state_machine();
@@ -199,15 +201,18 @@ void enterBootloader() {
     __asm__ (" goto 0x0016\n");
 }
 
+void trigLoPriorityInterrupt() {
+	__asm__ (" BSF _PIR1, 2  ");
+}
+
 #pragma config XINST=OFF
 
 int counter = 0;
 
 void main(void) {
-
-
-//	OSCCON = 0x70;
 	initIO();
+	g_ready_flags.all_steppers = 0xFF;
+	g_ready_flags2.all_steppers = 0xFF;
 
 	{
 		uint8_t i;
@@ -309,6 +314,7 @@ void main(void) {
 
 	g_sync_mask = 0x03;
 
+	/*
 	QUEUE_REAR(0)->move_distance = 0x10;
 	QUEUE_REAR(0)->move_speed = 1;
 	QUEUE_PUSH(0);
@@ -328,33 +334,40 @@ void main(void) {
 	QUEUE_REAR(0)->move_distance = 0 - 0x30;
 	QUEUE_REAR(0)->move_speed = 1;
 	QUEUE_PUSH(0);
+	*/
 
 	while (1) {
-		if (1 & QUEUE_EMPTY(0)) {
-			count++;
-			QUEUE_REAR(0)->move_distance = next;
-			QUEUE_REAR(0)->move_speed = 4;
+		if (hid_rx_buffer.uint32[0]) {
+			int dist=hid_rx_buffer.uint16[0];
+			int speed= hid_rx_buffer.uint16[1];
+			QUEUE_REAR(0)->move_distance = dist;
+			QUEUE_REAR(0)->move_speed = speed;
 			QUEUE_PUSH(0);
-			next = -next;
-			if (next > 0)
-				next++;
+			hid_rx_buffer.uint32[0] = 0;
+			trigLoPriorityInterrupt();
 		}
-
-		//UPDATE_STEPPER_STATE(0);
-		//UPDATE_STEPPER_STATE(1);
-		//UPDATE_STEPPER_STATE(2);
-		//UPDATE_STEPPER_STATE(3);
+		if (hid_rx_buffer.uint32[1]) {
+			int dist=hid_rx_buffer.uint16[2];
+			int speed= hid_rx_buffer.uint16[3];
+			QUEUE_REAR(1)->move_distance = dist;
+			QUEUE_REAR(1)->move_speed = speed;
+			QUEUE_PUSH(1);
+			hid_rx_buffer.uint32[1] = 0;
+			trigLoPriorityInterrupt();
+		}
 
 		g_toad4_status.steppers[0].position = get_position(0);//GET_POSITION(0);
 		g_toad4_status.steppers[1].position = get_position(1);//GET_POSITION(1);
 		g_toad4_status.steppers[2].position = get_position(2);//GET_POSITION(2);
 		g_toad4_status.steppers[3].position = get_position(3);//GET_POSITION(3);
 
-		g_toad4_status.debug_position = -1;	//g_stepper_states[0].position;
-		g_toad4_status.debug[0] = ready.all_steppers; // g_stepper_states[0].last_steps;
-		g_toad4_status.debug[1] = g_sync_mask; // g_stepper_states[0].last_steps;
-		g_toad4_status.debug[2] = g_ready_flags.all_steppers; // g_stepper_states[0].last_steps;
+		g_toad4_status.debug_position = g_stepper_states[1].position;//+g_stepper_states[1].last_steps- g_stepper_states[1].steps;
+		g_toad4_status.debug[0] = g_stepper_states[1].last_steps;
+		g_toad4_status.debug[1] = g_stepper_states[1].steps;
+		g_toad4_status.debug[2] = g_ready_flags.all_steppers;
+		g_toad4_status.debug[3] = g_ready_flags2.all_steppers;
 
+		// tarpeeton kopio
 		memcpyram2ram(&hid_tx_buffer, &g_toad4_status, 64);
 		//memcpyram2ram(&g_toad4_status, &g_toad4_status, 64);
 
@@ -378,8 +391,9 @@ void main(void) {
 			LED_PIN = 0;
 #endif
 
-		if (hid_rx_buffer[0]==0x55) {
-			hid_rx_buffer[0]=0;
+		// check for firmware update command
+		if (hid_rx_buffer.uint8[63]==0x55) {
+			hid_rx_buffer.uint8[63]=0; // WHY?
 			enterBootloader();
 		}
 
@@ -387,29 +401,12 @@ void main(void) {
 		if (g_hid_i_cnt_0 != g_hid_i_cnt) {
 			g_hid_i_cnt_0 = g_hid_i_cnt;
 			g_toad4_status.printf[0] = 0;
-			printft("Hello!\n" );
-
 		}
 
 //		if (!usbcdc_wr_busy()) {
-//			int t=g_toad4_status.steppers[0].position;
 //			printft("Hello %d\n",t );
 //		}
 		//	printft("*\n");
 	}
 
 }
-
-/*
- * TODO NEXT:
- * -reprogram without reset
- * -miksi testikortti ei toimi?
- * -siirry PIC18F45K50
- *
- *
- *
- *
- *
- *
- *
- */

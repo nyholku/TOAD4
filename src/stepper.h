@@ -143,11 +143,11 @@ typedef struct { // 31 bytes
 	volatile u8 forward;
 	volatile boolean accelerate;
 	volatile uint16 jogFlag;
-	volatile u8 probeArmed;
+	volatile u8 probeArmed; //OBSOLETE
 	volatile uint16 acceleration;
 	volatile uint32 probePosition;
-	volatile uint16 probeStopSpeed;
-	volatile uint16 probeDeceleration;
+	volatile uint16 probeStopSpeed; //OBSOLETE
+	volatile uint16 probeDeceleration; //OBSOLETE
 
 	volatile u8 pop;
 	volatile u8 rear;
@@ -228,6 +228,8 @@ extern volatile cmdQueue __at ( 0x0300 ) queues[];
 extern volatile unsigned char rx_timeout;
 extern volatile unsigned char probeTrigValue;
 extern volatile u8 syncCounter;
+extern volatile unsigned char g_probeArmed;
+extern volatile unsigned char g_probeTriggered;
 
 #endif /* STEPPER_H */
 

@@ -39,6 +39,9 @@
 
 volatile unsigned char rx_timeout = 0;
 volatile unsigned char probeTrigValue = 0;
+volatile unsigned char g_probeArmed = 0;
+volatile unsigned char g_probeTriggered = 0;
+
 
 #define STEPPER (*__stepper)
 #define QUEUE (*__queue)
@@ -76,6 +79,10 @@ u8 stepperGetState(u8 motorNo) {
 			else
 					t = STEPPER.state;
 			));
+
+	if (g_probeTriggered)
+		t |= 0x80;
+
 	return t;
 }
 
@@ -329,12 +336,12 @@ u8 stepperJog(u8 motorNo, uint16 loSpeed, uint16 hiSpeed, uint16 acceleration,
 	return ok;
 }
 
-u8 stepperArmProbe(u8 motorNo, uint16 stopSpeed, uint16 deceleration) {
+u8 stepperArmProbe(u8 motorNo, uint16 armProbe, uint16 obsolete) {
 	u8 ok = 0;
 	USE_STEPPER(CRITICAL(
-					STEPPER.probeArmed=TRUE;
-					STEPPER.probeStopSpeed=stopSpeed;
-					STEPPER.probeDeceleration=deceleration;
+					g_probeArmed = armProbe != 0;
+					if (!g_probeArmed)
+						g_probeTriggered = 0;
 			));
 	return ok;
 }
@@ -348,12 +355,10 @@ u8 stepperConfigProbe(u8 input, u8 trigValue) {
 uint32 stepperGetProbePosition(u8 motorNo) {
 	uint32 t;
 	USE_STEPPER(CRITICAL(
-					if (STEPPER.probeArmed) {
-						STEPPER.probeArmed = FALSE;
-						t = 0x80000000;
-					}
+					if (g_probeTriggered)
+						t=STEPPER.probePosition;
 					else
-					t=STEPPER.probePosition;
+						t = 0x80000000;
 			));
 	return t;
 }

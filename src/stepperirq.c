@@ -81,6 +81,15 @@ void stepperirq() __interrupt(1) {
 
 		probeInput = (PROBE ? probeTrigValue : !probeTrigValue); // PROBE
 
+		if (probeInput && g_probeArmed && !g_probeTriggered) {
+			g_probeTriggered = 1;
+			steppers[0].probePosition = steppers[0].position;
+			steppers[1].probePosition = steppers[1].position;
+			steppers[2].probePosition = steppers[2].position;
+			steppers[3].probePosition = steppers[3].position;
+			}
+
+
 		syncC = 0;
 		syncN = 0;
 		inSync = FALSE;

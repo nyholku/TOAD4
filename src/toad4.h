@@ -51,7 +51,7 @@
 #define HW_VERSION_STRING "4"
 #endif
 
-#define FW_VERSION_STRING "1.5.3"
+#define FW_VERSION_STRING "1.5.4"
 
 
 void initIO();

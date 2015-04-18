@@ -46,14 +46,6 @@
 
 	STEP_OUTPUT = 0; // Step pulse off in case it was on
 
-	if (STEPPER.probeArmed && probeInput) {
-		STEPPER.probeArmed = FALSE;
-		STEPPER.probePosition = STEPPER.position;
-		STEPPER.state = STATE_PROBE_DECELERATION;
-		STEPPER.acceleration = STEPPER.probeDeceleration;
-		STEPPER.accelerate=FALSE;
-	}
-
 	if (STEPPER.stepCounter) {
 		// Do the step pulse generation
 		oldv = STEPPER.speedNCO;

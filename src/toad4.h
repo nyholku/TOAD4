@@ -38,6 +38,7 @@
 
 #define NUMBER_OF_MOTORS 4
 
+// note all this is referenced from assembler so do-not rearrange at willy-nilly
 typedef volatile struct {
 	uint16_t nco; // offset 0
 	uint16_t speed; // offset 2
@@ -45,21 +46,25 @@ typedef volatile struct {
 	uint8_t steps; // offset 6
 	uint8_t next_steps; // offset 7
 	uint8_t last_steps; // offset 8
+	union {
 	struct { //offset 9
-		unsigned reserver_b0 :1;
+		unsigned in_sync :1; // bit 0
 		unsigned next_dir :1;
 		unsigned last_dir :1;
 		unsigned has_last :1;
-		unsigned reserve_b4 :1;
-		unsigned reserve_b5 :1;
-		unsigned reserve_b6 :1;
-		unsigned reserve_b7 :1;
+		unsigned ready :1;
+		unsigned ready2 :1;
+		unsigned not_busy :1;
+		unsigned not_busy2 :1; // bit 7
+	};
+		uint8_t flags;
 	};
 	uint8_t queue_size; // offset 10
 	uint8_t queue_rear; // offset 11
 	uint8_t queue_front; // offset 12
 	int32_t position; // offset 13
-// size now 17
+	uint8_t sync_group; // offset 17
+// size now 18
 //uint8_t reserve[4];
 } stepper_state_t;
 
@@ -92,9 +97,9 @@ typedef volatile struct {
 	};
 } stepper_flags_t;
 
-extern volatile stepper_state_t g_stepper_states[4];
+extern volatile stepper_state_t g_stepper_states[NUMBER_OF_MOTORS];
 extern volatile irq_flags_t g_irq_flags;
-extern volatile stepper_flags_t g_ready_flags;
+//extern volatile stepper_flags_t g_ready_flags;
 extern volatile uint8_t g_sync_mask;
 
 

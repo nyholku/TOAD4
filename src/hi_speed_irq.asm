@@ -11,7 +11,7 @@
 ; public variables in this module
 ;--------------------------------------------------------
 ;
-	global	_g_ready_flags
+;	global	_g_ready_flags
 	global  _g_stepper_states
 	global	_high_priority_interrupt_service
 ;
@@ -56,10 +56,10 @@ PRODH	equ	0xff4
 ;
 	udata 0x600
 ;
-#define motor_size 17
+#define motor_size 18
 
 _g_stepper_states	res 4*motor_size
-_g_ready_flags 		res 1
+;_g_ready_flags 		res 1
 ;
 ;
 ;--------------------------------------------------------
@@ -84,9 +84,17 @@ _g_ready_flags 		res 1
 #define next_speed 4
 #define steps 6
 #define next_steps 7
+
 #define flags 9
 ;#define has_next_bit 0
 #define next_dir_bit 1
+#define ready_bit 4
+#define ready2_bit 5
+#define not_busy_bit 6
+#define not_busy2_bit 7
+
+
+
 
 ;
 ;--------------------------------------------------------
@@ -127,10 +135,11 @@ ivec_0x1_high_priority_interrupt_service: code	0X000808
 ;
 ; Here we define a macro to do the actual step pulse generation 
 ;
-STEP_GENERATOR_MACRO macro motor,ready_bit,step_out_port,step_out_bit,dir_out_port,dir_out_bit
+STEP_GENERATOR_MACRO macro motor,step_out_port,step_out_bit,dir_out_port,dir_out_bit
 ;
+	local not_busy
+	local all_done
 	local no_steps_left
-	local pulse_gen_done
 	local next_dir_reverse
 	local no_next
 ;
@@ -145,11 +154,11 @@ STEP_GENERATOR_MACRO macro motor,ready_bit,step_out_port,step_out_bit,dir_out_po
 ;	if (MOTOR.steps) {
 ;
 	MOVF	(motor + steps), W
-	BZ	no_steps_left
+	BZ		no_steps_left
 ;	
 ;	if (MOTOR.nco_hi_bit) { // speed NCO overflowed and we have steps left => generate pulse
 ;
-	BNC	pulse_gen_done
+	BNC		all_done
 ;
 ;	MOTOR.steps--;
 ;
@@ -157,21 +166,21 @@ STEP_GENERATOR_MACRO macro motor,ready_bit,step_out_port,step_out_bit,dir_out_po
 ;
 ;	STEP_OUTPUT = 0;// STEP signal = 0 generates a rising edge on next interrupt
 ;
-	BCF	step_out_port, step_out_bit
-	BRA	pulse_gen_done
+	BCF		step_out_port, step_out_bit
+	BRA		all_done
 ;
 no_steps_left:
 ;
 ;	check if not ready i.e. queue processing has pushed more our way
 ;
-	BTFSC	_g_ready_flags, ready_bit, B
-	BRA	pulse_gen_done
+	BTFSC	(motor + flags), ready_bit, B
+	BRA		not_busy
+
+	BSF 	_PIR1, 2   	; // trig the queue processing with sw-interrupt
 ;
 ; Mark this stepper as ready (to receive more work to do)
 ;
-	BSF	_g_ready_flags, ready_bit, B
-;
-	BSF _PIR1, 2   ; // trig the queue processing with sw-interrupt 
+	BSF		(motor + flags), ready_bit, B
 ;
 ;	MOTOR.steps = MOTOR.next_steps;
 ;
@@ -185,20 +194,28 @@ no_steps_left:
 ;	if (MOTOR.next_dir) {
 ;
 	BTFSS	(motor + flags), next_dir_bit, B
-	BRA	next_dir_reverse
+	BRA		next_dir_reverse
 ;
 ;		DIR_OUTPUT=1;
 ;
-	BSF	dir_out_port, dir_out_bit
-	BRA	pulse_gen_done
+	BSF		dir_out_port, dir_out_bit
+	BRA		all_done
+;
+
+not_busy:
+	BTFSS	(motor + flags), not_busy_bit, B
+	BSF 	_PIR1, 2   	; // trig the queue processing with sw-interrupt
+	BSF		(motor + flags), not_busy_bit, B
+	BRA		all_done
+
 ;
 next_dir_reverse:
 ;
 ;		DIR_OUTPUT=0;
 ;
-	BCF	dir_out_port, dir_out_bit
+	BCF		dir_out_port, dir_out_bit
 ;
-pulse_gen_done:
+all_done:
 ;
 	endm
 ;
@@ -230,13 +247,13 @@ _high_priority_interrupt_service:
 	MOVLW	0x0f
 	IORWF	_LATD, F	
 ;
-	STEP_GENERATOR_MACRO MOTOR_X, 0, STEP_X_PORT, STEP_X_BIT, DIR_X_PORT, DIR_X_BIT	
+	STEP_GENERATOR_MACRO MOTOR_X, STEP_X_PORT, STEP_X_BIT, DIR_X_PORT, DIR_X_BIT
 ;
-	STEP_GENERATOR_MACRO MOTOR_Y, 1, STEP_Y_PORT, STEP_Y_BIT, DIR_Y_PORT, DIR_Y_BIT	
+	STEP_GENERATOR_MACRO MOTOR_Y, STEP_Y_PORT, STEP_Y_BIT, DIR_Y_PORT, DIR_Y_BIT
 ;
-	STEP_GENERATOR_MACRO MOTOR_Z, 2, STEP_Z_PORT, STEP_Z_BIT, DIR_Z_PORT, DIR_Z_BIT	
+	STEP_GENERATOR_MACRO MOTOR_Z, STEP_Z_PORT, STEP_Z_BIT, DIR_Z_PORT, DIR_Z_BIT
 ;
-	STEP_GENERATOR_MACRO MOTOR_4, 3, STEP_4_PORT, STEP_4_BIT, DIR_4_PORT, DIR_4_BIT	
+	STEP_GENERATOR_MACRO MOTOR_4, STEP_4_PORT, STEP_4_BIT, DIR_4_PORT, DIR_4_BIT
 ;
 _00146_DS_:
 ;	.line	157; stepperirq.c	LED_PIN = 0;

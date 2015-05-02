@@ -249,13 +249,16 @@
 		STEPPER.cmd = CMD_NONE;
 		cp = QUEUE_FRONT(STEPPER);
 		move = cp->moveDistance;
+		if (move > 0) {
+			STEPPER.forward = 1;
+			DIR_OUTPUT = FORWARD;
+		}
 		if (move < 0) {
 			move = -move;
-			forward = 0;
-		} else
-			forward = 1;
-		DIR_OUTPUT = forward ? FORWARD : REVERSE;
-		STEPPER.forward = forward;
+			STEPPER.forward = 0;
+			DIR_OUTPUT = REVERSE;
+		}
+		// DIR_OUTPUT = forward ? FORWARD : REVERSE;
 		STEPPER.motorSpeed = cp->moveSpeed;
 		STEPPER.stepCounter = move;
 		STEPPER.acceleration = 0;

@@ -136,7 +136,13 @@ typedef struct { // 31 bytes
 	volatile u8 home; // value of home input when 'at home'
 	volatile u8 forwardDir;
 	volatile uint16 accelNCO;
-	volatile uint16 speedNCO;
+	union {
+		volatile uint16 speedNCO;
+		struct {
+			volatile u8 speedNCO_lo;
+			volatile u8 speedNCO_hi;
+		};
+	};
 	volatile uint32 position;
 	volatile uint32 stepCounter; // was 16 bit
 	volatile uint16 motorSpeed;

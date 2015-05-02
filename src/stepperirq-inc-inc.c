@@ -47,6 +47,13 @@
 	STEP_OUTPUT = 0; // Step pulse off in case it was on
 
 	if (STEPPER.stepCounter) {
+		// Updete DIR signal half way through next step pulse
+		if (STEPPER.speedNCO_hi > 128) {
+			if (STEPPER.forward)
+				DIR_OUTPUT = FORWARD;
+			else
+				DIR_OUTPUT = REVERSE;
+		}
 		// Do the step pulse generation
 		oldv = STEPPER.speedNCO;
 		STEPPER.speedNCO += STEPPER.motorSpeed;
@@ -251,12 +258,10 @@
 		move = cp->moveDistance;
 		if (move > 0) {
 			STEPPER.forward = 1;
-			DIR_OUTPUT = FORWARD;
 		}
 		if (move < 0) {
 			move = -move;
 			STEPPER.forward = 0;
-			DIR_OUTPUT = REVERSE;
 		}
 		// DIR_OUTPUT = forward ? FORWARD : REVERSE;
 		STEPPER.motorSpeed = cp->moveSpeed;

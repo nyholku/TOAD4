@@ -53,6 +53,10 @@ pStepperCmd cp;
 u8 forward;
 int16 move;
 u8 stepsleft;
+volatile int16 xxx=0;
+volatile int16 yyy=0;
+volatile int16 zzz=0;
+volatile int16 aaa=0;
 
 // Following allows efficient access (with SDCC / PIC16 architecture)
 // to the stepsLeft flags and also makes it possible to treat them as
@@ -68,9 +72,9 @@ static union {
 	u8 allMotors;
 } stepsLeft;
 
-//#pragma nooverlay
 #pragma save
 #pragma nojtbound
+#pragma nooverlay
 void stepperirq() __interrupt(1) {
 
 	if (INTCONbits.TMR0IF) {  // TIMER0 interrupt processing
@@ -79,8 +83,20 @@ void stepperirq() __interrupt(1) {
 		if (rx_timeout)
 			rx_timeout--;
 
-		probeInput = (PROBE ? probeTrigValue : !probeTrigValue); // PROBE
 
+		syncC = 0;
+		syncN = 0;
+
+#define STEP_GENERATION
+#include "stepperirq-inc.c"
+
+		inSync = syncC > 0 && syncC == syncN;
+
+#define QUEUE_PROCESSING
+#include "stepperirq-inc.c"
+
+		probeInput = (PROBE ? probeTrigValue : !probeTrigValue); // PROBE
+		//
 		if (probeInput && g_probeArmed && !g_probeTriggered) {
 			g_probeTriggered = 1;
 			steppers[0].probePosition = steppers[0].position;
@@ -90,23 +106,6 @@ void stepperirq() __interrupt(1) {
 			}
 
 
-		syncC = 0;
-		syncN = 0;
-		inSync = FALSE;
-
-#define STEP_GENERATION
-#include "stepperirq-inc.c"
-
-		if (syncC > 0 && syncC == syncN) {
-			inSync = TRUE;
-			if (syncCounter == QUEUE_CAPACITY - 1)
-				syncCounter = 0;
-			else
-				syncCounter++;
-		}
-
-#define QUEUE_PROCESSING
-#include "stepperirq-inc.c"
 	} //End of TIMER0 interrupt processing
 
 	if (PIR2bits.USBIF) { // USB interrupt processing

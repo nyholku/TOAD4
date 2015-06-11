@@ -240,7 +240,7 @@
 	STEPPER.pop = FALSE;
 	if (STEPPER.syncMask) {
 		syncN++;
-		if (STEPPER.state == STATE_PROCESS_QUEUE && STEPPER.front == syncCounter && STEPPER.size != 0) {
+		if (STEPPER.state == STATE_PROCESS_QUEUE && STEPPER.size != 0) {
 			STEPPER.pop = TRUE;
 			syncC++;
 			}

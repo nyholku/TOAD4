@@ -47,7 +47,7 @@
 #include "usb_core.h"
 #include "state_machine.h"
 #include "command_queue.h"
-#include <string.h> // memcpyram2ram#include "usb_hid.h"
+#include <string.h> // memcpyram2ram#include "usb_hid.h"//
 
 uint8_t g_hid_i_cnt_0 = 0;
 typedef struct {int32_t position;//uint8_t padding[10];} stepper_status_t;

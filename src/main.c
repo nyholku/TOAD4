@@ -33,12 +33,12 @@
 
 #include "types.h"
 #include <pic18fregs.h>
-#include "usb_cdc.h"
+//#include "usb_cdc.h"
 #include "usb_defs.h"
 
 #include "stepper.h"
 #include "toad4.h"
-#include "cmdInterp.h"
+//#include "cmdInterp.h"
 #include "critical.h"
 #include "PIC-config.c"
 #include "stepperirq.h"
@@ -50,22 +50,25 @@
 #include <string.h> // memcpyram2ram#include "usb_hid.h"//
 
 uint8_t g_hid_i_cnt_0 = 0;
-typedef struct {int32_t position;//uint8_t padding[10];} stepper_status_t;
+typedef struct {int32_t position;
+uint8_t queue_state;
+//uint8_t padding[10];} stepper_status_t;
 
 // size 4+10 = 14 * 4= 56 => leaves 8 for other stuff
 
 typedef struct {
-	stepper_status_t steppers[6];
-	uint8_t filler[24];
+	uint8_t filler[18];
 	uint32_t debug_position;
 	uint8_t debug[4];
 	uint8_t printf[8];
+	stepper_status_t steppers[6];
 } toad4_status_t;
 
 static volatile toad4_status_t g_toad4_status;
+
 static volatile uint8_t g_low_pri_isr_guard;
+
 static uint8_t g_sync_counter[NUMBER_OF_MOTORS] = {0};
-//static stepper_flags_t g_ready_flags2={0};
 
 void putchar(char c) __wparam
 {
@@ -83,25 +86,6 @@ void putchar(char c) __wparam
 
 #define STEPPER(i) g_stepper_states[i]
 
-void sketch(int i) {
-	if (STEPPER(i).ready){
-		if (!STEPPER(i).ready2) {
-
-
-			// we get here every time a move has been execute and new has started executing
-			// problem is, this executed too early, ie it happens at the beginning of the first move
-			// and beginning of that last move, but not at the end of the last segment,
-			// more over we may or may not get here an opportunite moment
-
-			}
-		}
-
-
-	if (!QUEUE_EMPTY(i)) {
-
-	}
-
-}
 
 #define UPDATE_POS(i) do { \
 	if (STEPPER(i).ready && !STEPPER(i).ready2){ \
@@ -124,32 +108,32 @@ void sketch(int i) {
 	}while(0) \
 
 #define FEED_MORE(i) do { \
-		if (STEPPER(i).ready && !QUEUE_EMPTY(i) && STEPPER(i).in_sync) { \
-			int16_t distance = QUEUE_FRONT(i)->move_distance; \
-			uint8_t next_steps; \
-			if (distance < 0) { \
-				STEPPER(i).next_dir = 0; \
-				if (distance < -255) \
-					distance = -255; \
-				next_steps = -distance; \
- 				} \
- 			else { \
- 				STEPPER(i).next_dir = 1; \
- 				if (distance > +255) \
- 					distance = +255; \
-				next_steps = distance; \
-				} \
-			STEPPER(i).next_steps = next_steps; \
-			STEPPER(i).next_speed = QUEUE_FRONT(i)->move_speed; \
-			if ((QUEUE_FRONT(i)->move_distance -= distance) == 0) { \
-				QUEUE_POP(i); \
-				} \
-			g_sync_counter[ STEPPER(i).sync_group ]++; \
-			STEPPER(i).not_busy2 = 0; \
-			STEPPER(i).ready2 = 0; \
-			STEPPER(i).ready = 0; \
-			STEPPER(i).not_busy = 0; \
+	if (STEPPER(i).ready && !QUEUE_EMPTY(i) && STEPPER(i).in_sync) { \
+		int16_t distance = QUEUE_FRONT(i)->move_distance; \
+		uint8_t next_steps; \
+		if (distance < 0) { \
+			STEPPER(i).next_dir = 0; \
+			if (distance < -255) \
+				distance = -255; \
+			next_steps = -distance; \
 			} \
+		else { \
+			STEPPER(i).next_dir = 1; \
+			if (distance > +255) \
+				distance = +255; \
+			next_steps = distance; \
+			} \
+		STEPPER(i).next_steps = next_steps; \
+		STEPPER(i).next_speed = QUEUE_FRONT(i)->move_speed; \
+		if ((QUEUE_FRONT(i)->move_distance -= distance) == 0) { \
+			QUEUE_POP(i); \
+			} \
+		g_sync_counter[ STEPPER(i).sync_group ]++; \
+		STEPPER(i).not_busy2 = 0; \
+		STEPPER(i).ready2 = 0; \
+		STEPPER(i).ready = 0; \
+		STEPPER(i).not_busy = 0; \
+		} \
 	}while(0) \
 
 
@@ -158,7 +142,7 @@ void sketch(int i) {
 // This is macro because the argument 'i' is constant and by making this into a macro
 // the compiler has ample opportunity to optimize away all to the array indexes
 // and then some more.
-#define UPDATE_QUEUE(i) do { \
+#define UPDATE_QUEUE_OBSOLETE(i) do { \
 	if (STEPPER(i).ready){ \
 		if (!STEPPER(i).ready2) { \
 			STEPPER(i).ready2 = 1; \
@@ -196,30 +180,23 @@ void sketch(int i) {
 		} \
 	}while(0) \
 
-// /*1*/ If speed is so high that the move comes 'done' before the two next statemetns we will miss that...
 
-// 				STEPPER(i).in_sync = 0; \
-//			g_sync_counter[STEPPER(i).sync_group]--; \
+#define PUSH_TO_QUEUE(i)  do { \
+	int16_t dist = hid_rx_buffer.int16[i*2+0]; \
+	uint16_t speed = hid_rx_buffer.uint16[i*2+1]; \
+	if (dist==0 || speed!=0) { \
+		QUEUE_REAR(i)->move_distance = dist; \
+		QUEUE_REAR(i)->move_speed = speed; \
+		QUEUE_PUSH(i); \
+		hid_rx_buffer.int16[i*2+0] = 1; \
+		hid_rx_buffer.uint16[i*2+1] = 0; \
+		} \
+	}while(0) \
 
-// WE ARE DONE WHEN
-
-//     for (eachmotor)
-// 			if (g_sync_counter[STEPPER(i).sync_group] == 0)
-//     			motor.in_sync=1;
-
-// 			if (motor.in_sync)
-//				motor._in_sync=0;
-//				g_sync_counter[STEPPER(i).sync_group]++;
-
-
-//
-
-#define UPDATE_SYNC2(i) do { \
- 		if (g_sync_counter[ STEPPER(i).sync_group ] == 0 && !STEPPER(i).in_sync) { \
-			STEPPER(i).in_sync = 1; \
-			PIR1bits.CCP1IF=1; \
-			} \
-		}while(0) \
+#define UPDATE_STATUS(i)  do { \
+	g_toad4_status.steppers[i].position = get_position(i); \
+	g_toad4_status.steppers[i].queue_state =QUEUE_SIZE(i)+(QUEUE_CAPACITY<<4); \
+	}while(0) \
 
 
 
@@ -464,34 +441,26 @@ void main(void) {
 	QUEUE_PUSH(0);
 	*/
 
+
 	while (1) {
-		if (hid_rx_buffer.uint32[0]) {
-			int dist=hid_rx_buffer.uint16[0];
-			int speed= hid_rx_buffer.uint16[1];
-			QUEUE_REAR(0)->move_distance = dist;
-			QUEUE_REAR(0)->move_speed = speed;
-			QUEUE_PUSH(0);
-			hid_rx_buffer.uint32[0] = 0;
-		}
-		if (hid_rx_buffer.uint32[1]) {
-			int dist=hid_rx_buffer.uint16[2];
-			int speed= hid_rx_buffer.uint16[3];
-			QUEUE_REAR(1)->move_distance = dist;
-			QUEUE_REAR(1)->move_speed = speed;
-			QUEUE_PUSH(1);
-			hid_rx_buffer.uint32[1] = 0;
-		}
+		// push move request from the USB message to the queues
+
+		PUSH_TO_QUEUE(0);
+		PUSH_TO_QUEUE(1);
+		PUSH_TO_QUEUE(2);
+		PUSH_TO_QUEUE(3);
+
+		// trig interrupt so that the queues get updated
+
 		PIR1bits.CCP1IF=1;
 
-		// Kysymys: missä olosuhteissa lo_speed interrupt voi tapahtua niin
-		// että moottori A on pushed mutta moottori B ei vielä ja kuitenkin moottorit on
-		// in_sycn? koska siinä tapauksessa moottori A lähtee liikkeelle mutta B ei...
-		// eli miten tämä synkronoidaan?
+		// update toad4 status
 
-		g_toad4_status.steppers[0].position = get_position(0);//GET_POSITION(0);
-		g_toad4_status.steppers[1].position = get_position(1);//GET_POSITION(1);
-		g_toad4_status.steppers[2].position = get_position(2);//GET_POSITION(2);
-		g_toad4_status.steppers[3].position = get_position(3);//GET_POSITION(3);
+		UPDATE_STATUS(0);
+		UPDATE_STATUS(1);
+		UPDATE_STATUS(2);
+		UPDATE_STATUS(3);
+
 
 		g_toad4_status.debug_position = g_stepper_states[1].position;//+g_stepper_states[1].last_steps- g_stepper_states[1].steps;
 		g_toad4_status.debug[0] = g_stepper_states[0].flags;
@@ -499,7 +468,7 @@ void main(void) {
 		g_toad4_status.debug[2] = 0;//g_stepper_states[1].flags;
 		g_toad4_status.debug[3] = g_sync_counter[1];//g_ready_flags2.all_steppers;
 
-		// tarpeeton kopio
+		// tarpeeton kopio, why not update directly the
 		memcpyram2ram(&hid_tx_buffer, &g_toad4_status, 64);
 		//memcpyram2ram(&g_toad4_status, &g_toad4_status, 64);
 

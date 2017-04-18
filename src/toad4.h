@@ -98,7 +98,7 @@ typedef volatile struct {
 } stepper_flags_t;
 
 extern volatile stepper_state_t g_stepper_states[NUMBER_OF_MOTORS];
-extern volatile irq_flags_t g_irq_flags;
+//extern volatile irq_flags_t g_irq_flags;
 //extern volatile stepper_flags_t g_ready_flags;
 extern volatile uint8_t g_sync_mask;
 

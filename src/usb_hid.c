@@ -43,8 +43,6 @@ uint8_t g_hid_o_cnt; // host -> device
 void test_hid() {
 	if ((ep2_i.STAT & UOWN) == 0) {
 		g_hid_i_cnt++;
-		//LED_PIN = !LED_PIN;
-		//hid_tx_buffer.uint8[0]++;
 		ep2_i.CNT = 64;
 		if (ep2_i.STAT & DTS)
 			ep2_i.STAT = UOWN | DTSEN;

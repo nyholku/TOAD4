@@ -54,8 +54,8 @@ typedef struct { //
 	uint16_t wReportDescriptorLength; //
 } usb_hid_desc_t;
 
-extern uint8_t g_hid_i_cnt;
-extern uint8_t g_hid_o_cnt;
+//extern uint8_t g_hid_i_cnt;
+//extern uint8_t g_hid_o_cnt;
 void test_hid();
 
 #endif /* USB_HID_H */

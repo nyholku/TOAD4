@@ -47,24 +47,28 @@
 #include "usb_core.h"
 #include "state_machine.h"
 #include "command_queue.h"
-#include <string.h> // memcpyram2ram#include "usb_hid.h"//
+#include <string.h> // memcpyram2ram#include "usb_hid.h"
+#include "usb_pic_defs.h"//
 
 uint8_t g_hid_i_cnt_0 = 0;
 typedef struct {int32_t position;
 uint8_t queue_state;
-//uint8_t padding[10];} stepper_status_t;
+} stepper_status_t; // dev => host status
 
-// size 4+10 = 14 * 4= 56 => leaves 8 for other stuff
+// target_pos 4
+// current_speed 2
+// max_acceleration 2
+// state 1
+// == 13
 
 typedef struct {
-	uint8_t filler[18];
 	uint32_t debug_position;
 	uint8_t debug[4];
 	uint8_t printf[8];
 	stepper_status_t steppers[6];
 } toad4_status_t;
 
-static volatile toad4_status_t g_toad4_status;
+static volatile toad4_status_t g_toad4_status; // this gets sent to host in toto
 
 static volatile uint8_t g_low_pri_isr_guard;
 
@@ -86,6 +90,26 @@ void putchar(char c) __wparam
 
 #define STEPPER(i) g_stepper_states[i]
 
+#define INIT_MOTOR(i) do { \
+	g_toad4_status.steppers[i].position = 0; \
+	g_stepper_states[i].has_last = 0; \
+	g_stepper_states[i].next_dir = 0; \
+	g_stepper_states[i].last_dir = 0; \
+	g_stepper_states[i].next_steps = 0; \
+	g_stepper_states[i].last_steps = 0; \
+	g_stepper_states[i].ready = 1; \
+	g_stepper_states[i].ready2 = 1; \
+	g_stepper_states[i].not_busy = 1; \
+	g_stepper_states[i].not_busy2 = 1; \
+	g_stepper_states[i].in_sync = 1; \
+	g_stepper_states[i].steps = 0; \
+	g_stepper_states[i].speed = 0; \
+	g_stepper_states[i].position = 0; \
+	g_stepper_states[i].sync_group = 0; \
+	g_stepper_states[i].state= STATE_PROCESS_QUEUE; \
+	QUEUE_CLEAR(i); \
+} while(0)
+
 
 #define UPDATE_POS(i) do { \
 	if (STEPPER(i).ready && !STEPPER(i).ready2){ \
@@ -101,40 +125,47 @@ void putchar(char c) __wparam
 		STEPPER(i).not_busy2 = 1; \
 		g_sync_counter[ STEPPER(i).sync_group ]--; \
 		}\
-	}while(0) \
+	}while(0)
 
 #define UPDATE_SYNC(i) do { \
 		STEPPER(i).in_sync = g_sync_counter[ STEPPER(i).sync_group ] == 0; \
-	}while(0) \
+	}while(0)
+
+
+#define STATE_PROCESS_QUEUE 0
 
 #define FEED_MORE(i) do { \
-	if (STEPPER(i).ready && !QUEUE_EMPTY(i) && STEPPER(i).in_sync) { \
-		int16_t distance = QUEUE_FRONT(i)->move_distance; \
-		uint8_t next_steps; \
-		if (distance < 0) { \
-			STEPPER(i).next_dir = 0; \
-			if (distance < -255) \
-				distance = -255; \
-			next_steps = -distance; \
+	if (STEPPER(i).state == STATE_PROCESS_QUEUE) { \
+		if (STEPPER(i).ready && !QUEUE_EMPTY(i) && STEPPER(i).in_sync) { \
+			int16_t distance = QUEUE_FRONT(i)->move_distance; \
+			uint8_t next_steps; \
+			if (distance < 0) { \
+				STEPPER(i).next_dir = 0; \
+				if (distance < -255) \
+					distance = -255; \
+				next_steps = -distance; \
+				} \
+			else { \
+				STEPPER(i).next_dir = 1; \
+				if (distance > +255) \
+					distance = +255; \
+				next_steps = distance; \
+				} \
+			STEPPER(i).next_steps = next_steps; \
+			STEPPER(i).next_speed = QUEUE_FRONT(i)->move_speed; \
+			if ((QUEUE_FRONT(i)->move_distance -= distance) == 0) { \
+				QUEUE_POP(i); \
+				} \
+			g_sync_counter[ STEPPER(i).sync_group ]++; \
+			STEPPER(i).not_busy2 = 0; \
+			STEPPER(i).ready2 = 0; \
+			STEPPER(i).ready = 0; \
+			STEPPER(i).not_busy = 0; \
 			} \
-		else { \
-			STEPPER(i).next_dir = 1; \
-			if (distance > +255) \
-				distance = +255; \
-			next_steps = distance; \
-			} \
-		STEPPER(i).next_steps = next_steps; \
-		STEPPER(i).next_speed = QUEUE_FRONT(i)->move_speed; \
-		if ((QUEUE_FRONT(i)->move_distance -= distance) == 0) { \
-			QUEUE_POP(i); \
-			} \
-		g_sync_counter[ STEPPER(i).sync_group ]++; \
-		STEPPER(i).not_busy2 = 0; \
-		STEPPER(i).ready2 = 0; \
-		STEPPER(i).ready = 0; \
-		STEPPER(i).not_busy = 0; \
 		} \
-	}while(0) \
+		else { \
+		} \
+	}while(0)
 
 
 
@@ -178,7 +209,7 @@ void putchar(char c) __wparam
 			STEPPER(i).ready = 0; /*1*/ \
 			} \
 		} \
-	}while(0) \
+	}while(0)
 
 
 #define PUSH_TO_QUEUE(i)  do { \
@@ -191,15 +222,24 @@ void putchar(char c) __wparam
 		hid_rx_buffer.int16[i*2+0] = 1; \
 		hid_rx_buffer.uint16[i*2+1] = 0; \
 		} \
-	}while(0) \
+	}while(0)
 
 #define UPDATE_STATUS(i)  do { \
 	g_toad4_status.steppers[i].position = get_position(i); \
 	g_toad4_status.steppers[i].queue_state =QUEUE_SIZE(i)+(QUEUE_CAPACITY<<4); \
-	}while(0) \
+	}while(0)
 
 
-
+// To change number of motors supported you need to
+// 1) change this macro
+// 2) possibly adjust the hi-speed interrupt frequency
+// 3) update the number of motor in the hi speed interrupt asm code where it is hard coded
+#define FOR_EACH_MOTOR_DO(DO_THIS_FOR_ONE_MOTOR) do { \
+		DO_THIS_FOR_ONE_MOTOR(0); \
+		DO_THIS_FOR_ONE_MOTOR(1); \
+		DO_THIS_FOR_ONE_MOTOR(2); \
+		DO_THIS_FOR_ONE_MOTOR(3); \
+		}while(0)
 
 #pragma save
 #pragma nooverlay
@@ -241,7 +281,11 @@ void low_priority_interrupt_service() __interrupt(2) {
 //				syncount[motor]--
 //		}
 //
+		FOR_EACH_MOTOR_DO(UPDATE_POS);
+		FOR_EACH_MOTOR_DO(UPDATE_SYNC);
+		FOR_EACH_MOTOR_DO(FEED_MORE);
 
+		/*
 		UPDATE_POS(0);
 		UPDATE_POS(1);
 		UPDATE_POS(2);
@@ -256,6 +300,7 @@ void low_priority_interrupt_service() __interrupt(2) {
 		FEED_MORE(1);
 		FEED_MORE(2);
 		FEED_MORE(3);
+		*/
 
 //		UPDATE_SYNC(0);
 //		UPDATE_SYNC(1);
@@ -269,7 +314,7 @@ void low_priority_interrupt_service() __interrupt(2) {
 	if (INTCONbits.TMR0IF) {  // TIMER0 interrupt processing
 		INTCONbits.TMR0IF = 0;  // Clear flag
 		update_state_machine();
-	} //End of TIMER0 interrupt processing
+	} // End of TIMER0 interrupt processing
 
 	if (PIR3bits.USBIF) { // USB interrupt processing
 		PIR3bits.USBIF = 0;
@@ -303,6 +348,7 @@ void enterBootloader() {
 //	__asm__ (" BSF _PIR1, 2  ");
 //}
 
+// Turn off PIC extended instruction set, nobody supports it properly
 #pragma config XINST=OFF
 
 int counter = 0;
@@ -310,42 +356,15 @@ int counter = 0;
 void main(void) {
 	initIO();
 
-	{
-		uint8_t i;
-		for (i = 0; i < 4; i++) {
-			g_toad4_status.steppers[i].position = 0;
-			g_stepper_states[i].has_last = 0;
-			g_stepper_states[i].next_dir = 0;
-			g_stepper_states[i].last_dir = 0;
-			g_stepper_states[i].next_steps = 0;
-			g_stepper_states[i].last_steps = 0;
-			g_stepper_states[i].ready = 1;
-			g_stepper_states[i].ready2 = 1;
-			g_stepper_states[i].not_busy = 1;
-			g_stepper_states[i].not_busy2 = 1;
-			g_stepper_states[i].in_sync = 1;
-			g_stepper_states[i].steps = 0;
-			g_stepper_states[i].speed = 0;
-			g_stepper_states[i].position = 0;
-			g_stepper_states[i].sync_group = 0;
-		}
-	}
+
+	FOR_EACH_MOTOR_DO(INIT_MOTOR);
+
+
 	g_stepper_states[0].sync_group = 1;
 	g_stepper_states[1].sync_group = 1;
 
 
-	QUEUE_CLEAR(0);
-	QUEUE_CLEAR(1);
-	QUEUE_CLEAR(2);
-	QUEUE_CLEAR(3);
 
-//	stepperInit(MOTOR_X);
-
-//	stepperInit(MOTOR_Y);
-
-//	stepperInit(MOTOR_Z);
-
-//	stepperInit(MOTOR_4);
 
 	TRISCbits.TRISC6 = 0;
 
@@ -373,24 +392,10 @@ void main(void) {
 
 	T2CONbits.T2CKPS0 = 0;
 	T2CONbits.T2CKPS1 = 0; // Timer 2 prescaler 1 => 48 MHz / 4  /  1 = 12 Mhz
-	/*
-	T2CONbits.TOUTPS0 = 0; CEHCK
-	T2CONbits.TOUTPS1 = 0;
-	T2CONbits.TOUTPS2 = 0;
-	T2CONbits.TOUTPS3 = 0;
-	*/
-// PR2 = 69 = 12 Mhz / 69 = 174 kHz abs max interrupt frequency
+//  PR2 = 69 = 12 Mhz / 69 = 174 kHz abs max interrupt frequency
 	PR2 = 100; // 12 Mhz / 100 = 120 kHz
 
 	T2CONbits.TMR2ON = 1;
-
-///	stepperSetMode(MOTOR_X, 0xF, 0, 0, 0, 0);
-
-//	stepperSetMode(MOTOR_Y, 0xF, 0, 0, 0, 0);
-
-//	stepperSetMode(MOTOR_Z, 0xF, 0, 0, 0, 0);
-
-//	stepperSetMode(MOTOR_4, 0xF, 0, 0, 0, 0);
 
 	PIR1bits.CCP1IF = 1;
 
@@ -445,22 +450,26 @@ void main(void) {
 	while (1) {
 		// push move request from the USB message to the queues
 
-		PUSH_TO_QUEUE(0);
-		PUSH_TO_QUEUE(1);
-		PUSH_TO_QUEUE(2);
-		PUSH_TO_QUEUE(3);
+		if (!(ep2_o.STAT & UOWN)) {
+			// new data from host, so process it
 
-		// trig interrupt so that the queues get updated
+			FOR_EACH_MOTOR_DO(PUSH_TO_QUEUE);
 
-		PIR1bits.CCP1IF=1;
+			// trig interrupt so that the queues get updated
 
-		// update toad4 status
+			PIR1bits.CCP1IF=1;
 
-		UPDATE_STATUS(0);
-		UPDATE_STATUS(1);
-		UPDATE_STATUS(2);
-		UPDATE_STATUS(3);
+			// turn the buffer over to SIE so we can get more data
+			ep2_o.CNT = 64;
+			if (ep2_o.STAT & DTS)
+				ep2_o.STAT = UOWN | DTSEN;
+			else
+				ep2_o.STAT = UOWN | DTS | DTSEN;
+		}
 
+		// update toad4 status, we do this all the time so as to be ready when we can send it over
+
+		FOR_EACH_MOTOR_DO(UPDATE_STATUS);
 
 		g_toad4_status.debug_position = g_stepper_states[1].position;//+g_stepper_states[1].last_steps- g_stepper_states[1].steps;
 		g_toad4_status.debug[0] = g_stepper_states[0].flags;
@@ -468,9 +477,22 @@ void main(void) {
 		g_toad4_status.debug[2] = 0;//g_stepper_states[1].flags;
 		g_toad4_status.debug[3] = g_sync_counter[1];//g_ready_flags2.all_steppers;
 
-		// tarpeeton kopio, why not update directly the
-		memcpyram2ram(&hid_tx_buffer, &g_toad4_status, 64);
-		//memcpyram2ram(&g_toad4_status, &g_toad4_status, 64);
+		if (!(ep2_i.STAT & UOWN)) {
+			// we own the USB buffer, so update data going to the host
+
+			// tarpeeton kopio, why not transfer directly g_toad4_status??
+			memcpyram2ram(&hid_tx_buffer.uint8[0], &g_toad4_status.steppers[0], 5);
+			memcpyram2ram(&hid_tx_buffer.uint8[8], &g_toad4_status.steppers[1], 5);
+			memcpyram2ram(&hid_tx_buffer.uint8[16], &g_toad4_status.steppers[2], 5);
+			memcpyram2ram(&hid_tx_buffer.uint8[32], &g_toad4_status.steppers[3], 5);
+
+			// turn the buffer over to the SIE so the host will pick it up
+			ep2_i.CNT = 64;
+			if (ep2_i.STAT & DTS)
+				ep2_i.STAT = UOWN | DTSEN;
+			else
+				ep2_i.STAT = UOWN | DTS | DTSEN;
+		}
 
 #if 0
 		while (1) {
@@ -482,7 +504,7 @@ void main(void) {
 		}
 #endif
 
-		test_hid();
+//		test_hid();
 #if 1
 		counter++;
 
@@ -496,12 +518,6 @@ void main(void) {
 		if (hid_rx_buffer.uint8[63]==0x55) {
 			hid_rx_buffer.uint8[63]=0; // WHY?
 			enterBootloader();
-		}
-
-
-		if (g_hid_i_cnt_0 != g_hid_i_cnt) {
-			g_hid_i_cnt_0 = g_hid_i_cnt;
-			g_toad4_status.printf[0] = 0;
 		}
 
 //		if (!usbcdc_wr_busy()) {

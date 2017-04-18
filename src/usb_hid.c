@@ -37,12 +37,12 @@
 #include "toad4.h" // DEBUG ONLY
 #include "usb_core.h"
 
-uint8_t g_hid_i_cnt; // device -> host
-uint8_t g_hid_o_cnt; // host -> device
+//uint8_t g_hid_i_cnt; // device -> host
+//uint8_t g_hid_o_cnt; // host -> device
 
 void test_hid() {
 	if ((ep2_i.STAT & UOWN) == 0) {
-		g_hid_i_cnt++;
+		//g_hid_i_cnt++;
 		ep2_i.CNT = 64;
 		if (ep2_i.STAT & DTS)
 			ep2_i.STAT = UOWN | DTSEN;
@@ -51,7 +51,7 @@ void test_hid() {
 	}
 
 	if (!(ep2_o.STAT & UOWN)) {
-		g_hid_o_cnt++;
+		//g_hid_o_cnt++;
 		ep2_o.CNT = 64;
 		if (ep2_o.STAT & DTS)
 			ep2_o.STAT = UOWN | DTSEN;

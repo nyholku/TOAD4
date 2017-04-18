@@ -1,6 +1,6 @@
 ; NOTE: USEFUL DEBUG TOOL HERE: http://www.microchip.com/forums/m596618.aspx
 ;--------------------------------------------------------
-; File: hi_speef_irq.asm 
+; File: hi_speef_irq.asm
 ;--------------------------------------------------------
 ;
 	list	p=18f45k50
@@ -56,7 +56,7 @@ PRODH	equ	0xff4
 ;
 	udata 0x600
 ;
-#define motor_size 18
+#define motor_size 27
 
 _g_stepper_states	res 4*motor_size
 ;_g_ready_flags 		res 1
@@ -128,12 +128,12 @@ _g_stepper_states	res 4*motor_size
 ;--------------------------------------------------------
 ;
 ; This is the 'official'interrupt routine entry point, just a jump to the real stuff really
-; 
+;
 ;ivec_0x1_high_priority_interrupt_service: code	0X000008
 ivec_0x1_high_priority_interrupt_service: code	0X000808
 	GOTO	_high_priority_interrupt_service
 ;
-; Here we define a macro to do the actual step pulse generation 
+; Here we define a macro to do the actual step pulse generation
 ;
 STEP_GENERATOR_MACRO macro motor,step_out_port,step_out_bit,dir_out_port,dir_out_bit
 ;
@@ -155,7 +155,7 @@ STEP_GENERATOR_MACRO macro motor,step_out_port,step_out_bit,dir_out_port,dir_out
 ;
 	MOVF	(motor + steps), W
 	BZ		no_steps_left
-;	
+;
 ;	if (MOTOR.nco_hi_bit) { // speed NCO overflowed and we have steps left => generate pulse
 ;
 	BNC		all_done
@@ -245,7 +245,7 @@ _high_priority_interrupt_service:
 ;	STEP_OUTPUT_PORT |= STEP_OUTPUT_ALL;
 ;
 	MOVLW	0x0f
-	IORWF	_LATD, F	
+	IORWF	_LATD, F
 ;
 	STEP_GENERATOR_MACRO MOTOR_X, STEP_X_PORT, STEP_X_BIT, DIR_X_PORT, DIR_X_BIT
 ;

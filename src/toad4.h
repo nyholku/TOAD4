@@ -64,7 +64,12 @@ typedef volatile struct {
 	uint8_t queue_front; // offset 12
 	int32_t position; // offset 13
 	uint8_t sync_group; // offset 17
-// size now 18
+// size this far 18
+	uint8_t state;
+	int32_t target_pos;
+	uint16_t target_speed;
+	uint16_t max_acceleration;
+// size this far 27
 //uint8_t reserve[4];
 } stepper_state_t;
 

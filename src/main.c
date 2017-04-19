@@ -167,61 +167,32 @@ void putchar(char c) __wparam
 		} \
 	}while(0)
 
+#define CMD_MOVE 1
+// dist 2,speed 2,                    4 bytes
+#define CMD_MOVETO 2
+// target 4, speed 2, acceleration 2, 8 bytes (or 7 bytes if we so decide, target could be only 3 bytes)
+#define CMD_JOG 3
+// acceleration 2, speed 2,           4 bytes
+#define CMD_SEEK_HOME
 
-
-
-// This is macro because the argument 'i' is constant and by making this into a macro
-// the compiler has ample opportunity to optimize away all to the array indexes
-// and then some more.
-#define UPDATE_QUEUE_OBSOLETE(i) do { \
-	if (STEPPER(i).ready){ \
-		if (!STEPPER(i).ready2) { \
-			STEPPER(i).ready2 = 1; \
-			if (STEPPER(i).last_dir) \
-				STEPPER(i).position += STEPPER(i).last_steps; \
-			else \
-				STEPPER(i).position -= STEPPER(i).last_steps; \
-			STEPPER(i).last_dir = STEPPER(i).next_dir; \
-			STEPPER(i).last_steps = STEPPER(i).next_steps; \
-			}\
-		if (!QUEUE_EMPTY(i)) { \
-			int16_t distance = QUEUE_FRONT(i)->move_distance; \
-			uint8_t next_steps; \
-			if (distance < 0) { \
-				STEPPER(i).next_dir = 0; \
-				if (distance < -255) \
-					distance = -255; \
-				next_steps = -distance; \
- 				} \
- 			else { \
- 				STEPPER(i).next_dir = 1; \
- 				if (distance > +255) \
- 					distance = +255; \
-				next_steps = distance; \
-				} \
-			STEPPER(i).next_steps = next_steps; \
-			STEPPER(i).next_speed = QUEUE_FRONT(i)->move_speed; \
-			g_sync_counter[ STEPPER(i).sync_group ]++; \
-			if ((QUEUE_FRONT(i)->move_distance -= distance) == 0) { \
-				QUEUE_POP(i); \
-				} \
-			STEPPER(i).ready2 = 0; \
-			STEPPER(i).ready = 0; /*1*/ \
-			} \
-		} \
-	}while(0)
+// how do we run to target coordinates ?
+// we need acceleration/deceleration
 
 
 #define PUSH_TO_QUEUE(i)  do { \
-	int16_t dist = hid_rx_buffer.int16[i*2+0]; \
-	uint16_t speed = hid_rx_buffer.uint16[i*2+1]; \
-	if (dist==0 || speed!=0) { \
-		QUEUE_REAR(i)->move_distance = dist; \
-		QUEUE_REAR(i)->move_speed = speed; \
-		QUEUE_PUSH(i); \
-		hid_rx_buffer.int16[i*2+0] = 1; \
-		hid_rx_buffer.uint16[i*2+1] = 0; \
+	uint8_t cmd = hid_rx_buffer.uint8[i*8]; \
+	if (cmd == CMD_MOVE) { \
+		int16_t dist = hid_rx_buffer.int16[i*4+1]; \
+		uint16_t speed = hid_rx_buffer.uint16[i*4+2]; \
+		if (dist==0 || speed!=0) { \
+			QUEUE_REAR(i)->move_distance = dist; \
+			QUEUE_REAR(i)->move_speed = speed; \
+			QUEUE_PUSH(i); \
+			hid_rx_buffer.int16[i*2+0] = 1; \
+			hid_rx_buffer.uint16[i*2+1] = 0; \
+			} \
 		} \
+	hid_rx_buffer.uint8[i*8] = 0; /*just in case*/ \
 	}while(0)
 
 #define UPDATE_STATUS(i)  do { \
@@ -234,12 +205,44 @@ void putchar(char c) __wparam
 // 1) change this macro
 // 2) possibly adjust the hi-speed interrupt frequency
 // 3) update the number of motor in the hi speed interrupt asm code where it is hard coded
+
+#if NUMBER_OF_MOTORS==3
+#define FOR_EACH_MOTOR_DO(DO_THIS_FOR_ONE_MOTOR) do { \
+		DO_THIS_FOR_ONE_MOTOR(0); \
+		DO_THIS_FOR_ONE_MOTOR(1); \
+		DO_THIS_FOR_ONE_MOTOR(2); \
+		}while(0)
+#endif
+
+#if NUMBER_OF_MOTORS==4
 #define FOR_EACH_MOTOR_DO(DO_THIS_FOR_ONE_MOTOR) do { \
 		DO_THIS_FOR_ONE_MOTOR(0); \
 		DO_THIS_FOR_ONE_MOTOR(1); \
 		DO_THIS_FOR_ONE_MOTOR(2); \
 		DO_THIS_FOR_ONE_MOTOR(3); \
 		}while(0)
+#endif
+
+#if NUMBER_OF_MOTORS==5
+#define FOR_EACH_MOTOR_DO(DO_THIS_FOR_ONE_MOTOR) do { \
+		DO_THIS_FOR_ONE_MOTOR(0); \
+		DO_THIS_FOR_ONE_MOTOR(1); \
+		DO_THIS_FOR_ONE_MOTOR(2); \
+		DO_THIS_FOR_ONE_MOTOR(3); \
+		DO_THIS_FOR_ONE_MOTOR(4); \
+		}while(0)
+#endif
+
+#if NUMBER_OF_MOTORS==6
+#define FOR_EACH_MOTOR_DO(DO_THIS_FOR_ONE_MOTOR) do { \
+		DO_THIS_FOR_ONE_MOTOR(0); \
+		DO_THIS_FOR_ONE_MOTOR(1); \
+		DO_THIS_FOR_ONE_MOTOR(2); \
+		DO_THIS_FOR_ONE_MOTOR(3); \
+		DO_THIS_FOR_ONE_MOTOR(4); \
+		DO_THIS_FOR_ONE_MOTOR(5); \
+		}while(0)
+#endif
 
 #pragma save
 #pragma nooverlay
@@ -249,7 +252,7 @@ int32_t get_position(uint8_t i) {
 	uint8_t dlt;
 	int32_t pos;
 	uint8_t dir;
-	do {
+	do { // loop until we a reading not disturbed by the hi priority interrupt
 		stp = g_low_pri_isr_guard;
 		dlt = g_stepper_states[i].last_steps - g_stepper_states[i].steps;
 		pos = g_stepper_states[i].position;

@@ -37,31 +37,6 @@
 #include <stdint.h>
 
 
-#define STATE_STOP 0
-#define STATE_TIMEOUT 1
-#define STATE_PROCESS_QUEUE_OBS 2
-#define STATE_RUN 3
-
-#define STATE_SEEK_HOME_RAMP_UP 4
-#define STATE_SEEK_HOME_RUN 5
-#define STATE_SEEK_HOME_RAMP_DOWN 6
-
-#define STATE_SEEK_NOT_HOME_RAMP_UP 7
-#define STATE_SEEK_NOT_HOME_RUN 8
-#define STATE_SEEK_NOT_HOME_RAMP_DOWN 9
-
-#define STATE_SEEK_CRAWL_HOME 10
-#define STATE_SEEK_CRAWL_NOT_HOME 11
-
-#define STATE_JOG_PORCH 12
-#define STATE_JOG_CRAWL 13
-#define STATE_JOG_RUN 14
-
-#define STATE_PROBE_DECELERATION 15
-
-#define STATE_COMMAND_PENDING 16
-
-#define ERROR_TIMEOUT 1
 
 #define NUM_OF_MOTORS 4
 
@@ -69,16 +44,6 @@
 #define MOTOR_Y 1
 #define MOTOR_Z 2
 #define MOTOR_4 3
-
-#define CMD_NONE 0
-#define CMD_RAMP 1
-#define CMD_MOVE 2
-#define CMD_SEEK 3
-#define CMD_JOG 4
-
-#define WAIT_NONE 0
-#define WAIT_HOME 1
-#define WAIT_JOG 2
 
 
 

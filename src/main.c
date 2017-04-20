@@ -55,12 +55,6 @@ uint8_t g_hid_i_cnt_0 = 0;
 uint8_t queue_state;
 } stepper_status_t; // dev => host status
 
-// target_pos 4
-// current_speed 2
-// max_acceleration 2
-// state 1
-// == 13
-
 typedef struct {
 	uint32_t debug_position;
 	uint8_t debug[4];
@@ -159,11 +153,44 @@ void putchar(char c) __wparam
 		} \
 	}while(0)
 
+
+#define UPDATE_JOG(i) do { \
+	if (QUEUE_EMPTY(i) && (STEPPER(i).jog_on || STEPPER(i).jog_speed)) { \
+		if (STEPPER(i).jog_on) { \
+			STEPPER(i).jog_on = 0; \
+			if (STEPPER(i).jog_speed < STEPPER(i).max_speed - STEPPER(i).max_accel) \
+				STEPPER(i).jog_speed += STEPPER(i).max_accel; \
+			else \
+				STEPPER(i).jog_speed = STEPPER(i).max_speed; \
+			} \
+		else { \
+			if (STEPPER(i).jog_speed > STEPPER(i).max_accel) \
+				STEPPER(i).jog_speed -= STEPPER(i).max_accel; \
+			else {\
+				STEPPER(i).jog_speed = 0; \
+				break; \
+				} \
+			} \
+		{ \
+			uint16_t n = STEPPER(i).jog_speed_hi; \
+			if (n==0) \
+				n=1; \
+			QUEUE_REAR(i)->move_distance = n; \
+			QUEUE_REAR(i)->move_speed = STEPPER(i).jog_speed; \
+			QUEUE_PUSH(i);	\
+		}\
+		} \
+	}while(0)
+
+/*
+*/
+
+// NOTE! Jog dir not handled above
+// NOTE! if jog speed<256 jog dist = 0, which is bad
+
 #define CMD_MOVE 1
 // dist 2,speed 2,                    4 bytes
-#define CMD_MOVETO 2
-// target 4, speed 2, acceleration 2, 8 bytes (or 7 bytes if we so decide, target could be only 3 bytes)
-#define CMD_JOG 3
+#define CMD_JOG 2
 // acceleration 2, speed 2,           4 bytes
 #define CMD_SEEK_HOME
 
@@ -181,9 +208,13 @@ void putchar(char c) __wparam
 		} \
 	} while (0)
 
+struct {
+	DEFINE_SAFE_UINT16(val);
+} temp;
 
 #define PUSH_TO_QUEUE(i)  do { \
 	uint8_t cmd = hid_rx_buffer.uint8[i*8]; \
+	STEPPER(i).sync_group = hid_rx_buffer.uint8[i*8+1]; \
 	if (cmd == CMD_MOVE) { \
 		int16_t dist = hid_rx_buffer.int16[i*4+1]; \
 		uint16_t speed = hid_rx_buffer.uint16[i*4+2]; \
@@ -195,6 +226,11 @@ void putchar(char c) __wparam
 			hid_rx_buffer.uint16[i*2+1] = 0; \
 			} \
 	} else if (cmd == CMD_JOG)  do { \
+		temp.val = hid_rx_buffer.int16[i*4+1]; \
+		SAFE_ASSIGN(STEPPER(i).max_accel, temp.val);\
+		temp.val = hid_rx_buffer.int16[i*4+2]; \
+		SAFE_ASSIGN(STEPPER(i).max_speed, temp.val);\
+		STEPPER(i).jog_on = 1; \
 		}while(0); \
 	hid_rx_buffer.uint8[i*8] = 0; /*just in case*/ \
 	}while(0)
@@ -282,6 +318,7 @@ void low_priority_interrupt_service() __interrupt(2) {
 
 		FOR_EACH_MOTOR_DO(UPDATE_POS);
 		FOR_EACH_MOTOR_DO(UPDATE_SYNC);
+		FOR_EACH_MOTOR_DO(UPDATE_JOG);
 		FOR_EACH_MOTOR_DO(FEED_MORE);
 
 	} // End of 'software' interrupt processing
@@ -335,8 +372,8 @@ void main(void) {
 	FOR_EACH_MOTOR_DO(INIT_MOTOR);
 
 
-	g_stepper_states[0].sync_group = 1;
-	g_stepper_states[1].sync_group = 1;
+	//g_stepper_states[0].sync_group = 1;
+	//g_stepper_states[1].sync_group = 1;
 
 
 
@@ -421,8 +458,6 @@ void main(void) {
 	QUEUE_PUSH(0);
 	*/
 
-	SAFE_ASSIGN(STEPPER(0).max_speed,STEPPER(0).max_accel);
-
 	while (1) {
 		// push move request from the USB message to the queues
 
@@ -462,6 +497,10 @@ void main(void) {
 			memcpyram2ram(&hid_tx_buffer.uint8[16], &g_toad4_status.steppers[2], 5);
 			memcpyram2ram(&hid_tx_buffer.uint8[32], &g_toad4_status.steppers[3], 5);
 
+			hid_tx_buffer.uint8[48] = STEPPER(0).flags2;
+			hid_tx_buffer.uint16[24+1] = STEPPER(0).jog_speed;
+			hid_tx_buffer.uint16[24+2] = STEPPER(0).max_speed;
+			hid_tx_buffer.uint16[24+3] = STEPPER(0).max_accel;
 			// turn the buffer over to the SIE so the host will pick it up
 			ep2_i.CNT = 64;
 			if (ep2_i.STAT & DTS)
@@ -500,6 +539,11 @@ void main(void) {
 //			printft("Hello %d\n",t );
 //		}
 		//	printft("*\n");
+
+
+		// trig interrupt so that the queues get updated
+		//PIR1bits.CCP1IF=1;
+
 	}
 
 }

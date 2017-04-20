@@ -83,11 +83,6 @@ void putchar(char c) __wparam
 	}
 }
 
-//char getchar() {
-//	usbcdc_flush();
-//	return usbcdc_getchar();
-//}
-
 #define STEPPER(i) g_stepper_states[i]
 
 #define INIT_MOTOR(i) do { \
@@ -133,37 +128,34 @@ void putchar(char c) __wparam
 
 
 #define STATE_PROCESS_QUEUE 0
+#define STATE_JOG 1
 
 #define FEED_MORE(i) do { \
-	if (STEPPER(i).state == STATE_PROCESS_QUEUE) { \
-		if (STEPPER(i).ready && !QUEUE_EMPTY(i) && STEPPER(i).in_sync) { \
-			int16_t distance = QUEUE_FRONT(i)->move_distance; \
-			uint8_t next_steps; \
-			if (distance < 0) { \
-				STEPPER(i).next_dir = 0; \
-				if (distance < -255) \
-					distance = -255; \
-				next_steps = -distance; \
-				} \
-			else { \
-				STEPPER(i).next_dir = 1; \
-				if (distance > +255) \
-					distance = +255; \
-				next_steps = distance; \
-				} \
-			STEPPER(i).next_steps = next_steps; \
-			STEPPER(i).next_speed = QUEUE_FRONT(i)->move_speed; \
-			if ((QUEUE_FRONT(i)->move_distance -= distance) == 0) { \
-				QUEUE_POP(i); \
-				} \
-			g_sync_counter[ STEPPER(i).sync_group ]++; \
-			STEPPER(i).not_busy2 = 0; \
-			STEPPER(i).ready2 = 0; \
-			STEPPER(i).ready = 0; \
-			STEPPER(i).not_busy = 0; \
+	if (STEPPER(i).ready && !QUEUE_EMPTY(i) && STEPPER(i).in_sync) { \
+		int16_t distance = QUEUE_FRONT(i)->move_distance; \
+		uint8_t next_steps; \
+		if (distance < 0) { \
+			STEPPER(i).next_dir = 0; \
+			if (distance < -255) \
+				distance = -255; \
+			next_steps = -distance; \
 			} \
-		} \
 		else { \
+			STEPPER(i).next_dir = 1; \
+			if (distance > +255) \
+				distance = +255; \
+			next_steps = distance; \
+			} \
+		STEPPER(i).next_steps = next_steps; \
+		STEPPER(i).next_speed = QUEUE_FRONT(i)->move_speed; \
+		if ((QUEUE_FRONT(i)->move_distance -= distance) == 0) { \
+			QUEUE_POP(i); \
+			} \
+		g_sync_counter[ STEPPER(i).sync_group ]++; \
+		STEPPER(i).not_busy2 = 0; \
+		STEPPER(i).ready2 = 0; \
+		STEPPER(i).ready = 0; \
+		STEPPER(i).not_busy = 0; \
 		} \
 	}while(0)
 
@@ -178,6 +170,17 @@ void putchar(char c) __wparam
 // how do we run to target coordinates ?
 // we need acceleration/deceleration
 
+#define SAFE_ASSIGN(old,new) do { \
+	if (new > old) { \
+		old##_lo = new##_lo; \
+		old##_hi = new##_hi; \
+		} \
+	else { \
+		old##_hi = new##_hi; \
+		old##_lo = new##_lo; \
+		} \
+	} while (0)
+
 
 #define PUSH_TO_QUEUE(i)  do { \
 	uint8_t cmd = hid_rx_buffer.uint8[i*8]; \
@@ -191,7 +194,8 @@ void putchar(char c) __wparam
 			hid_rx_buffer.int16[i*2+0] = 1; \
 			hid_rx_buffer.uint16[i*2+1] = 0; \
 			} \
-		} \
+	} else if (cmd == CMD_JOG)  do { \
+		}while(0); \
 	hid_rx_buffer.uint8[i*8] = 0; /*just in case*/ \
 	}while(0)
 
@@ -252,7 +256,7 @@ int32_t get_position(uint8_t i) {
 	uint8_t dlt;
 	int32_t pos;
 	uint8_t dir;
-	do { // loop until we a reading not disturbed by the hi priority interrupt
+	do { // loop until we have a reading not disturbed by the lo priority interrupt
 		stp = g_low_pri_isr_guard;
 		dlt = g_stepper_states[i].last_steps - g_stepper_states[i].steps;
 		pos = g_stepper_states[i].position;
@@ -276,41 +280,9 @@ void low_priority_interrupt_service() __interrupt(2) {
 		g_low_pri_isr_guard++;
 		PIR1bits.CCP1IF = 0;
 
-//		if (syncmask & readybits == syncmask) // all ready
-//			syncbits = syncmask
-
-//		for (eachmotor ) {
-//			if (motor.ready2)
-//				syncount[motor]--
-//		}
-//
 		FOR_EACH_MOTOR_DO(UPDATE_POS);
 		FOR_EACH_MOTOR_DO(UPDATE_SYNC);
 		FOR_EACH_MOTOR_DO(FEED_MORE);
-
-		/*
-		UPDATE_POS(0);
-		UPDATE_POS(1);
-		UPDATE_POS(2);
-		UPDATE_POS(3);
-
-		UPDATE_SYNC(0);
-		UPDATE_SYNC(1);
-		UPDATE_SYNC(2);
-		UPDATE_SYNC(3);
-
-		FEED_MORE(0);
-		FEED_MORE(1);
-		FEED_MORE(2);
-		FEED_MORE(3);
-		*/
-
-//		UPDATE_SYNC(0);
-//		UPDATE_SYNC(1);
-//		UPDATE_SYNC(2);
-//		UPDATE_SYNC(3);
-
-
 
 	} // End of 'software' interrupt processing
 
@@ -449,6 +421,7 @@ void main(void) {
 	QUEUE_PUSH(0);
 	*/
 
+	SAFE_ASSIGN(STEPPER(0).max_speed,STEPPER(0).max_accel);
 
 	while (1) {
 		// push move request from the USB message to the queues

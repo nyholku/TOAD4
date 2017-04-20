@@ -56,7 +56,7 @@ PRODH	equ	0xff4
 ;
 	udata 0x600
 ;
-#define motor_size 27
+#define motor_size 26
 
 _g_stepper_states	res 4*motor_size
 ;_g_ready_flags 		res 1

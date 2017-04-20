@@ -38,6 +38,17 @@
 
 #define NUMBER_OF_MOTORS 4
 
+#define DEFINE_SAFE_UINT16(X) \
+	union {\
+		struct {\
+		uint8_t X##_lo;\
+		uint8_t X##_hi;\
+		};\
+		uint16_t X;\
+	}
+
+
+
 // note all this is referenced from assembler so do-not rearrange at willy-nilly
 typedef volatile struct {
 	uint16_t nco; // offset 0
@@ -66,10 +77,24 @@ typedef volatile struct {
 	uint8_t sync_group; // offset 17
 // size this far 18
 	uint8_t state;
-	int32_t target_pos;
-	uint16_t target_speed;
-	uint16_t max_acceleration;
-// size this far 27
+	DEFINE_SAFE_UINT16(jog_speed);
+	DEFINE_SAFE_UINT16(max_accel);
+	DEFINE_SAFE_UINT16(max_speed);
+	union {
+	struct {
+		unsigned jog_on :1; // bit 0
+		unsigned jog_dir :1;
+		unsigned reserve2 :1;
+		unsigned reserve3 :1;
+		unsigned reserve4 :1;
+		unsigned reserve5 :1;
+		unsigned reserve6 :1;
+		unsigned reserve7 :1; // bit 7
+	};
+		uint8_t flags2;
+	};
+// size this far 26
+
 //uint8_t reserve[4];
 } stepper_state_t;
 

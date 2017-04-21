@@ -184,7 +184,7 @@ void initIO() {
 
 	HOME_Z_TRIS = 1;
 
-	HOME_4_TRIS = 1;
+	HOME_A_TRIS = 1;
 
 	PROBE_TRIS = 1;
 

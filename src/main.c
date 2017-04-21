@@ -95,7 +95,7 @@ void putchar(char c) __wparam
 	g_stepper_states[i].speed = 0; \
 	g_stepper_states[i].position = 0; \
 	g_stepper_states[i].sync_group = 0; \
-	g_stepper_states[i].state= STATE_PROCESS_QUEUE; \
+	g_stepper_states[i].state= 0; \
 	QUEUE_CLEAR(i); \
 } while(0)
 
@@ -121,8 +121,8 @@ void putchar(char c) __wparam
 	}while(0)
 
 
-#define STATE_PROCESS_QUEUE 0
-#define STATE_JOG 1
+//#define STATE_PROCESS_QUEUE 0
+//#define STATE_JOG 1
 
 #define FEED_MORE(i) do { \
 	if (STEPPER(i).ready && !QUEUE_EMPTY(i) && STEPPER(i).in_sync) { \
@@ -153,6 +153,32 @@ void putchar(char c) __wparam
 		} \
 	}while(0)
 
+#define HOME_0 HOME_X
+#define HOME_1 HOME_Y
+#define HOME_2 HOME_Z
+#define HOME_3 HOME_A
+
+#define UPDATE_HOME(i) do { \
+	if (STEPPER(i).seek_home) {\
+		if (!HOME_##i) \
+			STEPPER(i).jog_on = 1; \
+		else \
+			STEPPER(i).seek_home = 0; \
+		} \
+		else if (STEPPER(i).seek_not_home) { \
+		if (HOME_##i) \
+			STEPPER(i).jog_on = 1; \
+		else \
+			STEPPER(i).seek_not_home = 0; \
+		} \
+	if (STEPPER(i).jog_on) { \
+		if (STEPPER(i).seek_reverse) \
+			STEPPER(i).jog_reverse = 1; \
+		else \
+			STEPPER(i).jog_reverse = 0; \
+		} \
+	}while(0)
+
 
 #define UPDATE_JOG(i) do { \
 	if (QUEUE_EMPTY(i) && (STEPPER(i).jog_on || STEPPER(i).jog_speed)) { \
@@ -172,9 +198,11 @@ void putchar(char c) __wparam
 				} \
 			} \
 		{ \
-			uint16_t n = STEPPER(i).jog_speed_hi; \
+			int16_t n = STEPPER(i).jog_speed_hi; \
 			if (n==0) \
 				n=1; \
+			if (STEPPER(i).jog_reverse) \
+ 	 	 	 	n=-n; \
 			QUEUE_REAR(i)->move_distance = n; \
 			QUEUE_REAR(i)->move_speed = STEPPER(i).jog_speed; \
 			QUEUE_PUSH(i);	\
@@ -189,30 +217,46 @@ void putchar(char c) __wparam
 // NOTE! if jog speed<256 jog dist = 0, which is bad
 
 #define CMD_MOVE 1
-// dist 2,speed 2,                    4 bytes
 #define CMD_JOG 2
-// acceleration 2, speed 2,           4 bytes
-#define CMD_SEEK_HOME
+#define CMD_RESET_POSITION 3
+
+#define CMD_JOG_FORWARD 8
+#define CMD_JOG_REVERSE 9
+#define CMD_SEEK_HOME_FORWARD 10
+#define CMD_SEEK_HOME_REVERSE 11
+#define CMD_SEEK_NOTHOME_FORWARD 12
+#define CMD_SEEK_NOTHOME_REVERSE 13
+
+
+#define CMD_JOG_FIRST CMD_JOG_FORWARD
+#define CMD_JOG_LAST CMD_SEEK_NOTHOME_REVERSE
+
+#define CMD_SEEK_CMD_MASK 0x70
+#define CMD_JOG_CMD_MASK 0x0C
 
 // how do we run to target coordinates ?
 // we need acceleration/deceleration
 
+struct {
+	DEFINE_SAFE_UINT16(val);
+} g_safe_assign_uint16;
+
 #define SAFE_ASSIGN(old,new) do { \
+	g_safe_assign_uint16.val = new; \
 	if (new > old) { \
-		old##_lo = new##_lo; \
-		old##_hi = new##_hi; \
+		old##_lo = g_safe_assign_uint16.val##_lo; \
+		old##_hi = g_safe_assign_uint16.val##_hi; \
 		} \
 	else { \
-		old##_hi = new##_hi; \
-		old##_lo = new##_lo; \
+		old##_hi = g_safe_assign_uint16.val##_hi; \
+		old##_lo = g_safe_assign_uint16.val##_lo; \
 		} \
 	} while (0)
 
-struct {
-	DEFINE_SAFE_UINT16(val);
-} temp;
 
-#define PUSH_TO_QUEUE(i)  do { \
+//*** check how to clear flags ***
+
+#define PROCESS_MOTOR_COMMANDS(i)  do { \
 	uint8_t cmd = hid_rx_buffer.uint8[i*8]; \
 	STEPPER(i).sync_group = hid_rx_buffer.uint8[i*8+1]; \
 	if (cmd == CMD_MOVE) { \
@@ -225,13 +269,45 @@ struct {
 			hid_rx_buffer.int16[i*2+0] = 1; \
 			hid_rx_buffer.uint16[i*2+1] = 0; \
 			} \
-	} else if (cmd == CMD_JOG)  do { \
-		temp.val = hid_rx_buffer.int16[i*4+1]; \
-		SAFE_ASSIGN(STEPPER(i).max_accel, temp.val);\
-		temp.val = hid_rx_buffer.int16[i*4+2]; \
-		SAFE_ASSIGN(STEPPER(i).max_speed, temp.val);\
-		STEPPER(i).jog_on = 1; \
-		}while(0); \
+	} else if ((cmd >= CMD_JOG_FIRST) && (cmd <= CMD_JOG_LAST)) { do { \
+		SAFE_ASSIGN(STEPPER(i).max_accel, hid_rx_buffer.int16[i*4+1]);\
+		SAFE_ASSIGN(STEPPER(i).max_speed, hid_rx_buffer.int16[i*4+2]);\
+		STEPPER(i).seek_home = 0; \
+		STEPPER(i).seek_not_home = 0; \
+		if (cmd == CMD_JOG_FORWARD) { \
+			STEPPER(i).jog_reverse = 0; \
+			STEPPER(i).jog_on = 1; \
+			break; \
+			} \
+		if (cmd == CMD_JOG_REVERSE) { \
+			STEPPER(i).jog_reverse = 1; \
+			STEPPER(i).jog_on = 1; \
+			break; \
+			} \
+		if (cmd == CMD_SEEK_HOME_FORWARD) { \
+			STEPPER(i).seek_reverse = 0; \
+			STEPPER(i).seek_home = 1; \
+			break; \
+			} \
+		if (cmd == CMD_SEEK_HOME_REVERSE) { \
+			STEPPER(i).seek_reverse = 1; \
+			STEPPER(i).seek_home = 1; \
+			break; \
+			} \
+		if (cmd == CMD_SEEK_NOTHOME_FORWARD) { \
+			STEPPER(i).seek_reverse = 0; \
+			STEPPER(i).seek_not_home = 1; \
+			break; \
+			} \
+		if (cmd == CMD_SEEK_NOTHOME_REVERSE) { \
+			STEPPER(i).seek_reverse = 1; \
+			STEPPER(i).seek_not_home = 1; \
+			break; \
+			} \
+		} while(0); \
+	} else if (cmd == CMD_RESET_POSITION) { \
+		STEPPER(i).position = hid_rx_buffer.int32[i*2+1]; \
+	} \
 	hid_rx_buffer.uint8[i*8] = 0; /*just in case*/ \
 	}while(0)
 
@@ -318,6 +394,7 @@ void low_priority_interrupt_service() __interrupt(2) {
 
 		FOR_EACH_MOTOR_DO(UPDATE_POS);
 		FOR_EACH_MOTOR_DO(UPDATE_SYNC);
+		FOR_EACH_MOTOR_DO(UPDATE_HOME);
 		FOR_EACH_MOTOR_DO(UPDATE_JOG);
 		FOR_EACH_MOTOR_DO(FEED_MORE);
 
@@ -464,7 +541,7 @@ void main(void) {
 		if (!(ep2_o.STAT & UOWN)) {
 			// new data from host, so process it
 
-			FOR_EACH_MOTOR_DO(PUSH_TO_QUEUE);
+			FOR_EACH_MOTOR_DO(PROCESS_MOTOR_COMMANDS);
 
 			// trig interrupt so that the queues get updated
 
@@ -498,6 +575,7 @@ void main(void) {
 			memcpyram2ram(&hid_tx_buffer.uint8[32], &g_toad4_status.steppers[3], 5);
 
 			hid_tx_buffer.uint8[48] = STEPPER(0).flags2;
+			hid_tx_buffer.uint8[49] = PORTCbits.RC7;
 			hid_tx_buffer.uint16[24+1] = STEPPER(0).jog_speed;
 			hid_tx_buffer.uint16[24+2] = STEPPER(0).max_speed;
 			hid_tx_buffer.uint16[24+3] = STEPPER(0).max_accel;

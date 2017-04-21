@@ -83,10 +83,10 @@ typedef volatile struct {
 	union {
 	struct {
 		unsigned jog_on :1; // bit 0
-		unsigned jog_dir :1;
-		unsigned reserve2 :1;
-		unsigned reserve3 :1;
-		unsigned reserve4 :1;
+		unsigned jog_reverse :1;
+		unsigned seek_home :1;
+		unsigned seek_not_home :1;
+		unsigned seek_reverse :1;
 		unsigned reserve5 :1;
 		unsigned reserve6 :1;
 		unsigned reserve7 :1; // bit 7
@@ -156,7 +156,7 @@ void initIO();
 
 extern u8 DUMMY_STEP_4;
 extern u8 DUMMY_DIR_4;
-extern u8 DUMMY_HOME_4;
+extern u8 DUMMY_HOME_A;
 
 #define STEP_X 			LATDbits.LATD0
 #define STEP_X_TRIS 	TRISDbits.TRISD0
@@ -234,7 +234,7 @@ extern u8 DUMMY_HOME_4;
 #define HOME_Z 			PORTEbits.RE1
 #define HOME_Z_TRIS 	TRISEbits.TRISE1
 
-#define HOME_4			DUMMY_HOME_4
+#define HOME_A			DUMMY_HOME_A
 
 //#define LED_PIN   		PORTBbits.RB4
 #define LED_PIN   		LATBbits.LATB4
@@ -294,8 +294,11 @@ extern u8 DUMMY_HOME_4;
 #define ENABLE_4 			LATDbits.LATD7
 #define ENABLE_4_TRIS 		TRISDbits.TRISD7
 
-#define HOME_X 				PORTAbits.RA2
-#define HOME_X_TRIS 		TRISAbits.TRISA2
+// Test on the Vero-board with the boot switch as HOME X
+//#define HOME_X 				PORTAbits.RA2
+//#define HOME_X_TRIS 		TRISAbits.TRISA2
+#define HOME_X 				PORTCbits.RC7
+#define HOME_X_TRIS 		TRISCbits.TRISC7
 
 #define HOME_Y 				PORTAbits.RA3
 #define HOME_Y_TRIS 		TRISAbits.TRISA3
@@ -303,8 +306,8 @@ extern u8 DUMMY_HOME_4;
 #define HOME_Z 				PORTAbits.RA4
 #define HOME_Z_TRIS 		TRISAbits.TRISA4
 
-#define HOME_4 				PORTAbits.RA5
-#define HOME_4_TRIS 		TRISAbits.TRISA5
+#define HOME_A 				PORTAbits.RA5
+#define HOME_A_TRIS 		TRISAbits.TRISA5
 
 #define LED_PIN   			LATBbits.LATB4
 #define LED_TRIS  			TRISBbits.TRISB4

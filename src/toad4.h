@@ -87,9 +87,9 @@ typedef volatile struct {
 		unsigned seek_home :1;
 		unsigned seek_not_home :1;
 		unsigned seek_reverse :1;
-		unsigned reserve5 :1;
-		unsigned reserve6 :1;
-		unsigned reserve7 :1; // bit 7
+		unsigned probeTriggered :1;
+		unsigned probeTrigOnRising :1;
+		unsigned probeTrigOnFalling :1; // bit 7
 	};
 		uint8_t flags2;
 	};

@@ -61,6 +61,21 @@
 #define HOME_2 HOME_Z
 #define HOME_3 HOME_A
 
+#define ENABLE_0 ENABLE_X
+#define ENABLE_1 ENABLE_Y
+#define ENABLE_2 ENABLE_Z
+#define ENABLE_3 ENABLE_A
+
+#define TORQUE_0 TORQUE_X
+#define TORQUE_1 TORQUE_Y
+#define TORQUE_2 TORQUE_Z
+#define TORQUE_3 TORQUE_A
+
+#define ENABLE_MOTOR(i,e) do { \
+	ENABLE_##i = e; \
+	TORQUE_##i = e; \
+	} while (0)
+
 #define CMD_MOVE 1
 #define CMD_RESET_POSITION 2
 #define CMD_ARM_PROBE 3
@@ -79,6 +94,17 @@
 typedef struct {
 	int32_t position;
 	uint8_t queue_state;
+	uint8_t debug_0;
+	uint8_t sync_counter;
+
+	unsigned ready :1;
+	unsigned ready2 :1;
+	unsigned not_busy :1;
+	unsigned not_busy2 :1;
+	unsigned not_empty :1;
+	unsigned bit6 :1;
+	unsigned in_sync :1; // bit 0
+	unsigned home :1; // bit 7
 } stepper_status_t; // dev => host status
 
 typedef struct {
@@ -100,7 +126,7 @@ static union {
 		unsigned bit7 :1; // bit 7
 	};
 	uint8_t as_uint8;
-} g_home_status;
+} g_home_status_obsolete;
 
 static uint8_t g_probe;
 
@@ -217,9 +243,9 @@ void putchar(char c) __wparam
 
 #define READ_HOME(i) do {\
 	if (HOME_##i) \
-		g_home_status.bit##i = 1; \
+		g_toad4_status.steppers[i].home = 1; \
 	else \
-		g_home_status.bit##i = 0; \
+		g_toad4_status.steppers[i].home = 0; \
 	}while(0)
 
 #define UPDATE_JOG(i) do { \
@@ -240,11 +266,12 @@ void putchar(char c) __wparam
 				} \
 			} \
 		{ \
-			int16_t n = STEPPER(i).jog_speed_hi; \
+			int16_t n = STEPPER(i).jog_speed_hi; /* jog_speed/256 */ \
 			if (n==0) \
 				n=1; \
+			n <<= 3; \
 			if (STEPPER(i).jog_reverse) \
- 	 	 	 	n=-n; \
+ 	 	 	 	n=-n; /* jog_speed/256*8 */\
 			QUEUE_REAR(i)->move_distance = n; \
 			QUEUE_REAR(i)->move_speed = STEPPER(i).jog_speed; \
 			QUEUE_PUSH(i);	\
@@ -295,11 +322,16 @@ struct {
 //*** check how to clear flags ***
 
 #define PROCESS_MOTOR_COMMANDS(i)  do { \
-	uint8_t cmd = hid_rx_buffer.uint8[i*8]; \
+	uint8_t cmd = hid_rx_buffer.uint8[i*8+0]; \
+	uint8_t flags = hid_rx_buffer.uint8[i*8+1]; \
+	STEPPER(i).sync_group = flags & 0x0F; \
+	if (flags & 0x10) \
+		ENABLE_MOTOR(i,1); \
+	else \
+		ENABLE_MOTOR(i,0); \
 	if (cmd == CMD_MOVE) { \
 		int16_t dist = hid_rx_buffer.int16[i*4+1]; \
 		uint16_t speed = hid_rx_buffer.uint16[i*4+2]; \
-		STEPPER(i).sync_group = hid_rx_buffer.uint8[i*8+1]; \
 		if (dist==0 || speed!=0) { \
 			QUEUE_REAR(i)->move_distance = dist; \
 			QUEUE_REAR(i)->move_speed = speed; \
@@ -346,7 +378,7 @@ struct {
 	} else if (cmd == CMD_RESET_POSITION) { \
 		STEPPER(i).position = hid_rx_buffer.int32[i*2+1]; \
 	} else if (cmd == CMD_ARM_PROBE) { \
-		uint8_t arm = hid_rx_buffer.uint8[i*8+1]; \
+		uint8_t arm = hid_rx_buffer.uint8[i*8+2]; \
 		if  (arm==0) { \
 			STEPPER(i).probeTriggered = 0; \
 			STEPPER(i).probeTrigOnFalling= 0; \
@@ -366,11 +398,27 @@ struct {
 	hid_rx_buffer.uint8[i*8] = 0; /*just in case*/ \
 	}while(0)
 
+#define BITCOPY(d,s) do {if (s) d=1; else d=0;} while(0)
+
 #define UPDATE_STATUS(i)  do { \
 	if (!STEPPER(i).probeTriggered) \
 		g_toad4_status.steppers[i].position = get_position(i); \
 	g_toad4_status.steppers[i].queue_state =QUEUE_SIZE(i)+(QUEUE_CAPACITY<<4); \
+	BITCOPY(g_toad4_status.steppers[i].ready , STEPPER(i).ready); \
+	BITCOPY(g_toad4_status.steppers[i].ready2 , STEPPER(i).ready2); \
+	BITCOPY(g_toad4_status.steppers[i].not_busy , STEPPER(i).not_busy); \
+	BITCOPY(g_toad4_status.steppers[i].not_busy2 , STEPPER(i).not_busy2); \
+	BITCOPY(g_toad4_status.steppers[i].in_sync,STEPPER(i).in_sync); \
+	BITCOPY(g_toad4_status.steppers[i].not_empty , !QUEUE_EMPTY(i)); \
+	g_toad4_status.steppers[i].sync_counter = g_sync_counter[ STEPPER(i).sync_group ]; \
 	}while(0)
+
+/*
+		BITCOPY(g_toad4_status.steppers[i].in_sync,STEPPER(i).in_sync); \
+		BITCOPY(g_toad4_status.steppers[i].ready , STEPPER(i).ready); \
+		BITCOPY(g_toad4_status.steppers[i].not_empty , QUEUE_EMPTY(i)); \
+		g_toad4_status.steppers[i].sync_counter = g_sync_counter[ STEPPER(i).sync_group ]; \
+*/
 
 // To change number of motors supported you need to
 // 1) change this macro
@@ -476,6 +524,8 @@ void low_priority_interrupt_service() __interrupt(2) {
 
 int16_t next = 16;
 int count = 0;
+
+
 
 /*
  void _entry (void) __naked __interrupt 0;
@@ -633,19 +683,19 @@ void main(void) {
 			// we own the USB buffer, so update data going to the host
 
 			// make structure g_toad4_status so that we can use a single copy
-			memcpyram2ram(&hid_tx_buffer.uint8[0], &g_toad4_status.steppers[0],5);
-			memcpyram2ram(&hid_tx_buffer.uint8[8], &g_toad4_status.steppers[1],5);
-			memcpyram2ram(&hid_tx_buffer.uint8[16], &g_toad4_status.steppers[2],5);
-			memcpyram2ram(&hid_tx_buffer.uint8[32], &g_toad4_status.steppers[3],5);
+			memcpyram2ram(&hid_tx_buffer.uint8[0], &g_toad4_status.steppers[0],8);
+			memcpyram2ram(&hid_tx_buffer.uint8[8], &g_toad4_status.steppers[1],8);
+			memcpyram2ram(&hid_tx_buffer.uint8[16], &g_toad4_status.steppers[2],8);
+			memcpyram2ram(&hid_tx_buffer.uint8[32], &g_toad4_status.steppers[3],8);
 
 			// 6*8 = 48
 			FOR_EACH_MOTOR_DO(READ_HOME);
 
 			hid_tx_buffer.uint8[48] = g_message_id;
-			hid_tx_buffer.uint8[49] = g_home_status.as_uint8;
-			hid_tx_buffer.uint8[50] = 0; // digital inputs 0-7
+			//hid_tx_buffer.uint8[49] = g_home_status.as_uint8;
+			hid_tx_buffer.uint8[50] = PORTA;//0; // digital inputs 0-7
 			hid_tx_buffer.uint8[51] = 0; // digital inputs 8-15
-			hid_tx_buffer.uint8[52] = 0; // analog input 0
+			hid_tx_buffer.uint8[52] = ADRESH; // analog input 0
 			hid_tx_buffer.uint8[53] = 0; // analog input 1
 
 

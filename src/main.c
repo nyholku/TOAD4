@@ -332,7 +332,7 @@ struct {
 	if (cmd == CMD_MOVE) { \
 		int16_t dist = hid_rx_buffer.int16[i*4+1]; \
 		uint16_t speed = hid_rx_buffer.uint16[i*4+2]; \
-		if (dist==0 || speed!=0) { \
+		if (1) { \
 			QUEUE_REAR(i)->move_distance = dist; \
 			QUEUE_REAR(i)->move_speed = speed; \
 			QUEUE_PUSH(i); \

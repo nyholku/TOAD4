@@ -55,7 +55,7 @@ SDCC = /Users/nyholku/sdcc-3.4.0/bin/sdcc
 
 # Compiler flags go here
 # --use-crt=crt0.o
-SDCCFLAGS = --no-crt --ivt-loc=0x800 -V -L /Users/nyholku/sdcc-3.4.0/share/sdcc/non-free/lib/pic16 -Wa,-S,0 -Wl,-m,-s18f45k50.lkr -mpic16 -p18f45k50 --disable-warning 85 --std-sdcc99 --obanksel=3 --use-non-free
+SDCCFLAGS = "-Wl -f 0xffff" --no-crt --ivt-loc=0x800 -V -L /Users/nyholku/sdcc-3.4.0/share/sdcc/non-free/lib/pic16 -Wa,-S,0 -Wl,-m,-s18f45k50.lkr -mpic16 -p18f45k50 --disable-warning 85 --std-sdcc99 --obanksel=3 --use-non-free
 
 # Where to store the target/intermediate/temporary/object files
 OBJDIR = ../obj
@@ -94,7 +94,6 @@ $(OBJDIR)/%.o: %.c $$(@D)/.f
 $(OBJDIR)/$(TARGET): $(addprefix $(OBJDIR)/, $(SRCS:.c=.o))  $(OBJDIR)/hi_speed_irq.o
 	$(SDCC) $(SDCCFLAGS) -o $(OBJDIR)/$(TARGET) $(addprefix $(OBJDIR)/, $(SRCS:.c=.o)) $(LIBS) $(OBJDIR)/hi_speed_irq.o
 	../bootloader/encoder/build/encoder -ix ../obj/toad4.hex -ox ../obj/toad4-encoded.hex -e E03389975409007FA500138CF27636E9
-	../bootloader/encoder/build/encoder -ix ../obj/toad4-encoded.hex -ox ../obj/toad4-decoded.hex -d E03389975409007FA500138CF27636E9
 	java -cp ~/FirmwareUpdate/bin:/Users/nyholku//PureJavaHidApi/bin/purejavahidapi.jar:/Users/Nyholku/PureJavaHidApi/lib/jna-4.0.0.jar Test
 
 #	cp ../obj/toad4-encoded.hex ~/FirmwareUpdate/src

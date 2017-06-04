@@ -267,8 +267,8 @@ extern u8 DUMMY_HOME_A;
 #define STEP_Z 				LATDbits.LATD2
 #define STEP_Z_TRIS 		TRISDbits.TRISD2
 
-#define STEP_4 				LATDbits.LATD3
-#define STEP_4_TRIS 		TRISDbits.TRISD3
+#define STEP_A 				LATDbits.LATD3
+#define STEP_A_TRIS 		TRISDbits.TRISD3
 
 #define DIR_X 				LATCbits.LATC0
 #define DIR_X_TRIS 			TRISCbits.TRISC0
@@ -279,8 +279,8 @@ extern u8 DUMMY_HOME_A;
 #define DIR_Z 				LATCbits.LATC2
 #define DIR_Z_TRIS 			TRISCbits.TRISC2
 
-#define DIR_4 				LATBbits.LATB6
-#define DIR_4_TRIS 			TRISBbits.TRISB6
+#define DIR_A 				LATBbits.LATB6
+#define DIR_A_TRIS 			TRISBbits.TRISB6
 
 #define ENABLE_X 			LATDbits.LATD4
 #define ENABLE_X_TRIS 		TRISDbits.TRISD4
@@ -291,14 +291,11 @@ extern u8 DUMMY_HOME_A;
 #define ENABLE_Z 			LATDbits.LATD6
 #define ENABLE_Z_TRIS 		TRISDbits.TRISD6
 
-#define ENABLE_4 			LATDbits.LATD7
-#define ENABLE_4_TRIS 		TRISDbits.TRISD7
+#define ENABLE_A 			LATDbits.LATD7
+#define ENABLE_A_TRIS 		TRISDbits.TRISD7
 
-// Test on the Vero-board with the boot switch as HOME X
-//#define HOME_X 				PORTAbits.RA2
-//#define HOME_X_TRIS 		TRISAbits.TRISA2
-#define HOME_X 				PORTCbits.RC7
-#define HOME_X_TRIS 		TRISCbits.TRISC7
+#define HOME_X 				PORTAbits.RA2
+#define HOME_X_TRIS 		TRISAbits.TRISA2
 
 #define HOME_Y 				PORTAbits.RA3
 #define HOME_Y_TRIS 		TRISAbits.TRISA3
@@ -315,8 +312,9 @@ extern u8 DUMMY_HOME_A;
 #define PROBE 				PORTAbits.RA1
 #define PROBE_TRIS	 		TRISAbits.TRISA1
 
-#define SPEED_POT_TRIS 		PORTAbits.RA0
-#define SPEED_POT_TRIS_TRIS	TRISAbits.TRISA0
+#define SPEED_POT_DIO 		PORTAbits.RA0
+#define SPEED_POT_ANSEL		ANSELAbits.ANSA0
+#define SPEED_POT_TRIS		TRISAbits.TRISA0
 
 #define TORQUE_X 			PORTBbits.RB0
 #define TORQUE_X_TRIS		TRISBbits.TRISB0
@@ -327,8 +325,8 @@ extern u8 DUMMY_HOME_A;
 #define TORQUE_Z 			PORTBbits.RB2
 #define TORQUE_Z_TRIS		TRISBbits.TRISB2
 
-#define TORQUE_4 			PORTBbits.RB7
-#define TORQUE_4_TRIS		TRISBbits.TRISB7
+#define TORQUE_A 			PORTBbits.RB7
+#define TORQUE_A_TRIS		TRISBbits.TRISB7
 
 #define SPINDLE_FWD 		LATEbits.LATE0
 #define SPINDLE_FWD_TRIS	TRISEbits.TRISE0

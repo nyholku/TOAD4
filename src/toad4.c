@@ -36,9 +36,9 @@ volatile uint8_t g_sync_mask;
 
 #if TOAD_HW_VERSION==HW3
 
-u8 DUMMY_STEP_4;
-u8 DUMMY_DIR_4;
-u8 DUMMY_HOME_4;
+u8 DUMMY_STEP_A;
+u8 DUMMY_DIR_A;
+u8 DUMMY_HOME_A;
 
 void initIO() {
 	// set pin to output
@@ -114,6 +114,12 @@ void initIO() {
 
 
 void initIO() {
+	ANSELA = 0x01;
+	ANSELB = 0x00;
+	ANSELC = 0x00;
+	ANSELD = 0x00;
+	ANSELE = 0x00;
+
 	LED_PIN = 0;
 	LED_TRIS = 0;
 
@@ -126,8 +132,8 @@ void initIO() {
 	STEP_Z =0;
 	STEP_Z_TRIS = 0;
 
-	STEP_4 =0;
-	STEP_4_TRIS = 0;
+	STEP_A =0;
+	STEP_A_TRIS = 0;
 
 	DIR_X =0;
 	DIR_X_TRIS = 0;
@@ -138,8 +144,8 @@ void initIO() {
 	DIR_Z =0;
 	DIR_Z_TRIS = 0;
 
-	DIR_4 =0;
-	DIR_4_TRIS = 0;
+	DIR_A =0;
+	DIR_A_TRIS = 0;
 
 	ENABLE_X =0;
 	ENABLE_X_TRIS = 0;
@@ -150,8 +156,8 @@ void initIO() {
 	ENABLE_Z =0;
 	ENABLE_Z_TRIS = 0;
 
-	ENABLE_4 =0;
-	ENABLE_4_TRIS = 0;
+	ENABLE_A =0;
+	ENABLE_A_TRIS = 0;
 
 	TORQUE_X =0;
 	TORQUE_X_TRIS = 0;
@@ -162,8 +168,8 @@ void initIO() {
 	TORQUE_Z =0;
 	TORQUE_Z_TRIS = 0;
 
-	TORQUE_4 =0;
-	TORQUE_4_TRIS = 0;
+	TORQUE_A =0;
+	TORQUE_A_TRIS = 0;
 
 	SPINDLE_FWD = 0;
 	SPINDLE_FWD_TRIS = 0;
@@ -189,8 +195,10 @@ void initIO() {
 	PROBE_TRIS = 1;
 
 	SPEED_POT_TRIS =1;
+	SPEED_POT_ANSEL = 1;
 
-	ADCON1 = 0x0f;
+	ADCON0 = 0x01;
+	ADCON1 = 0x00;
 
 	// PWM setup
     T2CONbits.TMR2ON = 0;  // Turn the timer off

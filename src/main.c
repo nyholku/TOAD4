@@ -94,17 +94,24 @@
 typedef struct {
 	int32_t position;
 	uint8_t queue_state;
-	uint8_t debug_0;
+	unsigned home :1; // bit 0
+	unsigned reserved_1 :1;
+	unsigned reserved_2 :1;
+	unsigned reserved_3 :1;
+	unsigned reserved_4 :1;
+	unsigned reserved_5 :1;
+	unsigned reserved_6 :1;
+	unsigned reserved_7 :1; // bit 7
 	uint8_t sync_counter;
 
-	unsigned ready :1;
+	unsigned ready :1; // bit 0
 	unsigned ready2 :1;
 	unsigned not_busy :1;
 	unsigned not_busy2 :1;
 	unsigned not_empty :1;
-	unsigned bit6 :1;
-	unsigned in_sync :1; // bit 0
-	unsigned home :1; // bit 7
+	unsigned bit_5 :1;
+	unsigned in_sync :1;
+	unsigned home_xxx :1; // bit 7
 } stepper_status_t; // dev => host status
 
 typedef struct {
@@ -137,6 +144,8 @@ static volatile uint8_t g_low_pri_isr_guard;
 static uint8_t g_sync_counter[NUMBER_OF_MOTORS] = { 0 };
 
 static uint8_t g_message_id = 0;
+
+#define BITCPY(d,s) do {if (s) d=1; else d=0;} while(0)
 
 void putchar(char c) __wparam
 {
@@ -176,7 +185,7 @@ void putchar(char c) __wparam
 			STEPPER(i).position += STEPPER(i).last_steps; \
 		else \
 			STEPPER(i).position -= STEPPER(i).last_steps; \
-		STEPPER(i).last_dir = STEPPER(i).next_dir; \
+		BITCPY(STEPPER(i).last_dir,STEPPER(i).next_dir); \
 		STEPPER(i).last_steps = STEPPER(i).next_steps; \
 		}\
 	if (STEPPER(i).not_busy && !STEPPER(i).not_busy2) { \
@@ -192,23 +201,21 @@ void putchar(char c) __wparam
 //#define STATE_PROCESS_QUEUE 0
 //#define STATE_JOG 1
 
+volatile int huuhaa3;
+volatile char huuhaa4;
+void huuhaa2() {
+	huuhaa3--;
+	if (huuhaa3)
+		huuhaa4--;
+
+}
+
 #define FEED_MORE(i) do { \
 	if (STEPPER(i).ready && !QUEUE_EMPTY(i) && STEPPER(i).in_sync) { \
-		int16_t distance = QUEUE_FRONT(i)->move_distance; \
-		uint8_t next_steps; \
-		if (distance < 0) { \
-			STEPPER(i).next_dir = 0; \
-			if (distance < -255) \
-				distance = -255; \
-			next_steps = -distance; \
-			} \
-		else { \
-			STEPPER(i).next_dir = 1; \
-			if (distance > +255) \
-				distance = +255; \
-			next_steps = distance; \
-			} \
-		STEPPER(i).next_steps = next_steps; \
+		/* int16_t distance = QUEUE_FRONT(i)->move_distance; */ \
+		int8_t distance = QUEUE_FRONT(i)->move_distance; \
+		BITCPY(STEPPER(i).next_dir,QUEUE_FRONT(i)->move_dir); \
+		STEPPER(i).next_steps = distance; \
 		STEPPER(i).next_speed = QUEUE_FRONT(i)->move_speed; \
 		if ((QUEUE_FRONT(i)->move_distance -= distance) == 0) { \
 			QUEUE_POP(i); \
@@ -330,15 +337,13 @@ struct {
 	else \
 		ENABLE_MOTOR(i,0); \
 	if (cmd == CMD_MOVE) { \
-		int16_t dist = hid_rx_buffer.int16[i*4+1]; \
+		uint8_t dist = hid_rx_buffer.uint8[i*8+2]; \
+		uint8_t dir = hid_rx_buffer.uint8[i*8+3]; \
 		uint16_t speed = hid_rx_buffer.uint16[i*4+2]; \
-		if (1) { \
-			QUEUE_REAR(i)->move_distance = dist; \
-			QUEUE_REAR(i)->move_speed = speed; \
-			QUEUE_PUSH(i); \
-			hid_rx_buffer.int16[i*2+0] = 1; \
-			hid_rx_buffer.uint16[i*2+1] = 0; \
-			} \
+		QUEUE_REAR(i)->move_dir = dir; \
+		QUEUE_REAR(i)->move_distance = dist; \
+		QUEUE_REAR(i)->move_speed = speed; \
+		QUEUE_PUSH(i); \
 	} else if ((cmd >= CMD_JOG_FIRST) && (cmd <= CMD_JOG_LAST)) { do { \
 		SAFE_ASSIGN(STEPPER(i).max_accel, hid_rx_buffer.int16[i*4+1]);\
 		SAFE_ASSIGN(STEPPER(i).max_speed, hid_rx_buffer.int16[i*4+2]);\
@@ -398,25 +403,42 @@ struct {
 	hid_rx_buffer.uint8[i*8] = 0; /*just in case*/ \
 	}while(0)
 
-#define BITCOPY(d,s) do {if (s) d=1; else d=0;} while(0)
 
 #define UPDATE_STATUS(i)  do { \
 	if (!STEPPER(i).probeTriggered) \
 		g_toad4_status.steppers[i].position = get_position(i); \
 	g_toad4_status.steppers[i].queue_state =QUEUE_SIZE(i)+(QUEUE_CAPACITY<<4); \
-	BITCOPY(g_toad4_status.steppers[i].ready , STEPPER(i).ready); \
-	BITCOPY(g_toad4_status.steppers[i].ready2 , STEPPER(i).ready2); \
-	BITCOPY(g_toad4_status.steppers[i].not_busy , STEPPER(i).not_busy); \
-	BITCOPY(g_toad4_status.steppers[i].not_busy2 , STEPPER(i).not_busy2); \
-	BITCOPY(g_toad4_status.steppers[i].in_sync,STEPPER(i).in_sync); \
-	BITCOPY(g_toad4_status.steppers[i].not_empty , !QUEUE_EMPTY(i)); \
+	if (!STEPPER(i).not_busy2) \
+		g_toad4_status.steppers[i].queue_state++; \
+	BITCPY(g_toad4_status.steppers[i].ready , STEPPER(i).ready); \
+	BITCPY(g_toad4_status.steppers[i].ready2 , STEPPER(i).ready2); \
+	BITCPY(g_toad4_status.steppers[i].not_busy , STEPPER(i).not_busy); \
+	BITCPY(g_toad4_status.steppers[i].not_busy2 , STEPPER(i).not_busy2); \
+	BITCPY(g_toad4_status.steppers[i].in_sync,STEPPER(i).in_sync); \
+	BITCPY(g_toad4_status.steppers[i].not_empty , !QUEUE_EMPTY(i)); \
+	BITCPY(g_toad4_status.steppers[i].home , HOME_##i); \
 	g_toad4_status.steppers[i].sync_counter = g_sync_counter[ STEPPER(i).sync_group ]; \
 	}while(0)
 
+
+#define UPDATE_OUTPUTS()  \
+	if (hid_rx_buffer.uint8[50]&0x01) \
+		SPINDLE_FWD = 1; \
+	else \
+		SPINDLE_FWD = 0; \
+	if (hid_rx_buffer.uint8[50]&0x02) \
+		SPINDLE_REV = 1; \
+	else \
+		SPINDLE_REV = 0; \
+	if (hid_rx_buffer.uint8[50]&0x04) \
+		COOLANT = 1; \
+	else \
+		COOLANT = 0; \
+
 /*
-		BITCOPY(g_toad4_status.steppers[i].in_sync,STEPPER(i).in_sync); \
-		BITCOPY(g_toad4_status.steppers[i].ready , STEPPER(i).ready); \
-		BITCOPY(g_toad4_status.steppers[i].not_empty , QUEUE_EMPTY(i)); \
+		BITCPY(g_toad4_status.steppers[i].in_sync,STEPPER(i).in_sync); \
+		BITCPY(g_toad4_status.steppers[i].ready , STEPPER(i).ready); \
+		BITCPY(g_toad4_status.steppers[i].not_empty , QUEUE_EMPTY(i)); \
 		g_toad4_status.steppers[i].sync_counter = g_sync_counter[ STEPPER(i).sync_group ]; \
 */
 
@@ -494,16 +516,12 @@ void low_priority_interrupt_service() __interrupt(2) {
 		g_low_pri_isr_guard++;
 		PIR1bits.CCP1IF = 0;
 
-		if (PROBE)
-			g_probe = 1;
-		else
-			g_probe = 0;
 
 		FOR_EACH_MOTOR_DO(UPDATE_POS);
 		FOR_EACH_MOTOR_DO(UPDATE_SYNC);
-		FOR_EACH_MOTOR_DO(UPDATE_HOME);
-		FOR_EACH_MOTOR_DO(UPDATE_PROBE);
-		FOR_EACH_MOTOR_DO(UPDATE_JOG);
+		//FOR_EACH_MOTOR_DO(UPDATE_HOME);
+		//FOR_EACH_MOTOR_DO(UPDATE_PROBE);
+		//FOR_EACH_MOTOR_DO(UPDATE_JOG);
 		FOR_EACH_MOTOR_DO(FEED_MORE);
 
 	} // End of 'software' interrupt processing
@@ -586,7 +604,7 @@ void main(void) {
 	T2CONbits.T2CKPS0 = 0;
 	T2CONbits.T2CKPS1 = 0; // Timer 2 prescaler 1 => 48 MHz / 4  /  1 = 12 Mhz
 //  PR2 = 69 = 12 Mhz / 69 = 174 kHz abs max interrupt frequency
-	PR2 = 100; // 12 Mhz / 100 = 120 kHz
+	PR2 = 120; // 12 Mhz / 100 = 120 kHz , 120=> 100 kHz
 
 	T2CONbits.TMR2ON = 1;
 
@@ -640,6 +658,19 @@ void main(void) {
 	 */
 
 	while (1) {
+		/*
+		if (0 && QUEUE_SIZE(0)<4) {
+			ENABLE_MOTOR(0,1);
+		 	 QUEUE_REAR(0)->move_dir = 0;
+			 QUEUE_REAR(0)->move_distance = 10;
+			 QUEUE_REAR(0)->move_speed = 4200;
+			 QUEUE_PUSH(0);
+			PIR1bits.CCP1IF = 0;
+
+		}
+		*/
+
+
 		// push move request from the USB message to the queues
 
 		if (!(ep2_o.STAT & UOWN)) {
@@ -656,6 +687,8 @@ void main(void) {
 
 			// not firmware update, next process motor commands
 			FOR_EACH_MOTOR_DO(PROCESS_MOTOR_COMMANDS);
+
+			UPDATE_OUTPUTS();
 
 			g_message_id = hid_rx_buffer.uint8[48];
 			// hid_rx_buffer.uint8[49]; current control (common to all motors? , would break symmetry
@@ -680,6 +713,10 @@ void main(void) {
 		FOR_EACH_MOTOR_DO(UPDATE_STATUS);
 
 		if (!(ep2_i.STAT & UOWN)) {
+			if (PROBE)
+				g_probe = 1;
+			else
+				g_probe = 0;
 			// we own the USB buffer, so update data going to the host
 
 			// make structure g_toad4_status so that we can use a single copy
@@ -689,17 +726,25 @@ void main(void) {
 			memcpyram2ram(&hid_tx_buffer.uint8[32], &g_toad4_status.steppers[3],8);
 
 			// 6*8 = 48
-			FOR_EACH_MOTOR_DO(READ_HOME);
+			//FOR_EACH_MOTOR_DO(READ_HOME);
 
 			hid_tx_buffer.uint8[48] = g_message_id;
-			//hid_tx_buffer.uint8[49] = g_home_status.as_uint8;
+			hid_tx_buffer.uint8[49] = g_probe; // low bit only
 			hid_tx_buffer.uint8[50] = PORTA;//0; // digital inputs 0-7
 			hid_tx_buffer.uint8[51] = 0; // digital inputs 8-15
 			hid_tx_buffer.uint8[52] = ADRESH; // analog input 0
-			hid_tx_buffer.uint8[53] = 0; // analog input 1
+			hid_tx_buffer.uint8[53] = 0;
+			hid_tx_buffer.uint8[54] = 0;
+			hid_tx_buffer.uint8[55] = 0;
+			hid_tx_buffer.uint8[56] = 0;
+			hid_tx_buffer.uint8[57] = 0;
+			hid_tx_buffer.uint8[58] = 0;
+			hid_tx_buffer.uint8[59] = 0;
+			hid_tx_buffer.uint8[60] = 0;
+			hid_tx_buffer.uint8[61] = 0;
 
 
-			hid_tx_buffer.uint16[31] = 0x1234; // BCD version number
+			hid_tx_buffer.uint16[31] = 0x2014; // BCD version number
 			// turn the buffer over to the SIE so the host will pick it up
 			ep2_i.CNT = 64;
 			if (ep2_i.STAT & DTS)

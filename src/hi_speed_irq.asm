@@ -135,7 +135,7 @@ ivec_0x1_high_priority_interrupt_service: code	0X000808
 ;
 ; Here we define a macro to do the actual step pulse generation
 ;
-STEP_GENERATOR_MACRO macro motor,step_out_port,step_out_bit,dir_out_port,dir_out_bit
+STEP_GENERATOR_MACRO macro motor,step_out_port,step_out_bit,dir_out_port,dir_out_bit,DEBUG
 ;
 	local not_busy
 	local all_done
@@ -175,7 +175,11 @@ no_steps_left:
 ;
 	BTFSC	(motor + flags), ready_bit, B
 	BRA		not_busy
-
+;
+	IF DEBUG==1
+	BCF	_LATBbits,4
+	ENDIF
+;
 	BSF 	_PIR1, 2   	; // trig the queue processing with sw-interrupt
 ;
 ; Mark this stepper as ready (to receive more work to do)
@@ -203,9 +207,13 @@ no_steps_left:
 ;
 
 not_busy:
+	IF DEBUG==1
+	BSF	_LATBbits,4
+	ENDIF
 	BTFSS	(motor + flags), not_busy_bit, B
 	BSF 	_PIR1, 2   	; // trig the queue processing with sw-interrupt
 	BSF		(motor + flags), not_busy_bit, B
+;
 	BRA		all_done
 
 ;
@@ -247,13 +255,13 @@ _high_priority_interrupt_service:
 	MOVLW	0x0f
 	IORWF	_LATD, F
 ;
-	STEP_GENERATOR_MACRO MOTOR_X, STEP_X_PORT, STEP_X_BIT, DIR_X_PORT, DIR_X_BIT
+	STEP_GENERATOR_MACRO MOTOR_X, STEP_X_PORT, STEP_X_BIT, DIR_X_PORT, DIR_X_BIT, 1
 ;
-	STEP_GENERATOR_MACRO MOTOR_Y, STEP_Y_PORT, STEP_Y_BIT, DIR_Y_PORT, DIR_Y_BIT
+	STEP_GENERATOR_MACRO MOTOR_Y, STEP_Y_PORT, STEP_Y_BIT, DIR_Y_PORT, DIR_Y_BIT, 0
 ;
-	STEP_GENERATOR_MACRO MOTOR_Z, STEP_Z_PORT, STEP_Z_BIT, DIR_Z_PORT, DIR_Z_BIT
+	STEP_GENERATOR_MACRO MOTOR_Z, STEP_Z_PORT, STEP_Z_BIT, DIR_Z_PORT, DIR_Z_BIT, 0
 ;
-	STEP_GENERATOR_MACRO MOTOR_4, STEP_4_PORT, STEP_4_BIT, DIR_4_PORT, DIR_4_BIT
+	STEP_GENERATOR_MACRO MOTOR_4, STEP_4_PORT, STEP_4_BIT, DIR_4_PORT, DIR_4_BIT, 0
 ;
 _00146_DS_:
 ;	.line	157; stepperirq.c	LED_PIN = 0;
@@ -265,3 +273,21 @@ _00146_DS_:
 	RETFIE	0x01
 ;
 	end
+;
+; Notes:
+; ready_bit
+;		set by hiPriInt when steps_left counter reaches zero i.e. all steps have been performed, this
+;		always happens after NCO overflow and indicates that hiPriInt has consumed request at
+;		next_xxx and loPriInt can fill in more work
+;		cleared byloPriInt when loPriInt has filled next_speed,next_steps,next_dir indicating
+;		to hiPriInt that there is more work hiPriInt
+; ready2_bit
+;		used by loPriInt to detect when it first sees the read_bit set in which situation the last_XXX
+;		variables are used to update position counter and next_XXX contain what the hiPriInt is
+;		currently performing and are thus used to upr
+; not_busy_bit
+;		set by hiPriInt when there is no more steps to perform and loPriInt has not requested more work
+;		cleared by loPriInt when it has pushed more work for hiPriInt via next_xxx
+; not_busy_bit2 used by loPriInt to detect the first time it sees not_busy_bit set in which
+;		situation the sync counter (for the group) is decrement because that ????
+;

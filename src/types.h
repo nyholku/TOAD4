@@ -31,8 +31,8 @@
  */
 
 
-#ifndef TYPES_H_
-#define TYPES_H_
+#ifndef __TYPES_H__
+#define __TYPES_H__
 
 typedef unsigned char u8;
 typedef short int16;

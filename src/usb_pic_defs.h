@@ -30,8 +30,8 @@
  * OF SUCH DAMAGE.
  */
 
-#ifndef USB_PIC_DEFS_H__
-#define USB_PIC_DEFS_H__
+#ifndef __USB_PIC_DEFS_H__
+#define __USB_PIC_DEFS_H__
 
 #define UOWN   0x80 // USB Own Bit
 #define DTS    0x40 // Data Toggle Synchronization Bit

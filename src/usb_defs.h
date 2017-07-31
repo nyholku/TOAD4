@@ -30,8 +30,8 @@
  * OF SUCH DAMAGE.
  */
 
-#ifndef USB_DEFS_H_
-#define USB_DEFS_H_
+#ifndef __USB_DEFS_H__
+#define __USB_DEFS_H__
 
 #include <stdint.h>
 

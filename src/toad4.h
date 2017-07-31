@@ -30,24 +30,15 @@
  * OF SUCH DAMAGE.
  */
 
-#ifndef TOAD4_H_
-#define TOAD4_H_
+#ifndef __TOAD4_H__
+#define __TOAD4_H__
 
 #include <stdint.h>
 #include <pic18fregs.h>
 
 #define NUMBER_OF_MOTORS 4
 
-#define DEFINE_SAFE_UINT16(X) \
-	union {\
-		struct {\
-		uint8_t X##_lo;\
-		uint8_t X##_hi;\
-		};\
-		uint16_t X;\
-	}
-
-
+__code void* get_toad4_config();
 
 // note all this is referenced from assembler so do-not rearrange at willy-nilly
 typedef volatile struct {
@@ -77,9 +68,9 @@ typedef volatile struct {
 	uint8_t sync_group; // offset 17
 // size this far 18
 	uint8_t state;
-	DEFINE_SAFE_UINT16(jog_speed);
-	DEFINE_SAFE_UINT16(max_accel);
-	DEFINE_SAFE_UINT16(max_speed);
+	uint16_t jog_speed_OBSOLETE;
+	uint16_t max_accel_OBSOLETE;
+	uint16_t max_speed_OBSOLETE;
 	union {
 	struct {
 		unsigned jog_on :1; // bit 0
@@ -94,8 +85,6 @@ typedef volatile struct {
 		uint8_t flags2;
 	};
 // size this far 26
-
-//uint8_t reserve[4];
 } stepper_state_t;
 
 typedef volatile struct {
@@ -128,135 +117,30 @@ typedef volatile struct {
 } stepper_flags_t;
 
 extern volatile stepper_state_t g_stepper_states[NUMBER_OF_MOTORS];
-//extern volatile irq_flags_t g_irq_flags;
-//extern volatile stepper_flags_t g_ready_flags;
-extern volatile uint8_t g_sync_mask;
-
 
 // Supported hardware versions
-#define HW3 3
 #define HW4 4
+
 // Define for which version this is built
 #define TOAD_HW_VERSION HW4
 
 // Form the version literals
-#if TOAD_HW_VERSION== HW3
-#define HW_VERSION_STRING "3"
-#endif
 
 #if TOAD_HW_VERSION== HW4
 #define HW_VERSION_STRING "4"
 #endif
 
-#define FW_VERSION_STRING "1.5.2"
+#define FW_VERSION_MAJOR 2
+#define FW_VERSION_MINOR 0
+#define FW_VERSION_BUGFIX 0
+
+#define NCO_FREQUENCY 100000
+
+#define NUMBER_OF_MOTORS 4
 
 void initIO();
 
-#if TOAD_HW_VERSION==HW3
-
-extern u8 DUMMY_STEP_4;
-extern u8 DUMMY_DIR_4;
-extern u8 DUMMY_HOME_A;
-
-#define STEP_X 			LATDbits.LATD0
-#define STEP_X_TRIS 	TRISDbits.TRISD0
-
-#define STEP_Y 			LATDbits.LATD1
-#define STEP_Y_TRIS 	TRISDbits.TRISD1
-
-#define STEP_Z 			LATDbits.LATD2
-#define STEP_Z_TRIS 	TRISDbits.TRISD2
-
-#define STEP_4 			DUMMY_STEP_4
-
-#define DIR_X 			LATDbits.LATD3
-#define DIR_X_TRIS 		TRISDbits.TRISD3
-
-#define DIR_Y 			LATDbits.LATD4
-#define DIR_Y_TRIS 		TRISDbits.TRISD4
-
-#define DIR_Z 			LATDbits.LATD5
-#define DIR_Z_TRIS 		TRISDbits.TRISD5
-
-#define DIR_4			DUMMY_DIR_4
-
-#define MODE1_X 		LATDbits.LATD6 // same as MODE1_Y
-#define MODE1_X_TRIS 	TRISDbits.TRISD6
-
-#define MODE1_Y 		LATDbits.LATD6
-#define MODE1_Y_TRIS 	TRISDbits.TRISD6
-
-#define MODE1_Z 		LATDbits.LATD7
-#define MODE1_Z_TRIS 	TRISDbits.TRISD7
-
-#define ENABLE_X 		LATCbits.LATC0
-#define ENABLE_X_TRIS 	TRISCbits.TRISC0
-
-#define ENABLE_Y 		LATCbits.LATC1
-#define ENABLE_Y_TRIS 	TRISCbits.TRISC1
-
-#define ENABLE_Z 		LATCbits.LATC2
-#define ENABLE_Z_TRIS 	TRISCbits.TRISC2
-
-#define TQ1_X 			LATBbits.LATB2 // same as TQ1_Y
-#define TQ1_X_TRIS 	    TRISBbits.TRISB2
-
-#define TQ2_X			LATBbits.LATB3 // same as TQ2_Y
-#define TQ2_X_TRIS		TRISBbits.TRISB3
-
-#define TQ1_Y			LATBbits.LATB2
-#define TQ1_Y_TRIS		TRISBbits.TRISB2
-
-#define TQ2_Y 			LATBbits.LATB3
-#define TQ2_Y_TRIS		TRISBbits.TRISB3
-
-#define TQ1_Z 			LATBbits.LATB0
-#define TQ1_Z_TRIS 		TRISBbits.TRISB0
-
-#define TQ2_Z 			LATBbits.LATB1
-#define TQ2_Z_TRIS 		TRISBbits.TRISB1
-
-#define DCY1_X 			LATBbits.LATB6 // same as DCY1_Y
-#define DCY1_X_TRIS 	TRISBbits.TRISB6
-
-#define DCY1_Y 			LATBbits.LATB6
-#define DCY1_Y_TRIS 	TRISBbits.TRISB6
-
-#define DCY1_Z 			LATBbits.LATB7
-#define DCY1_Z_TRIS 	TRISBbits.TRISB7
-
-#define HOME_X 			PORTAbits.RA3
-#define HOME_X_TRIS 	TRISAbits.TRISA3
-
-#define HOME_Y 			PORTAbits.RA5
-#define HOME_Y_TRIS 	TRISAbits.TRISA5
-
-#define HOME_Z 			PORTEbits.RE1
-#define HOME_Z_TRIS 	TRISEbits.TRISE1
-
-#define HOME_A			DUMMY_HOME_A
-
-//#define LED_PIN   		PORTBbits.RB4
-#define LED_PIN   		LATBbits.LATB4
-#define LED_TRIS  		TRISBbits.TRISB4
-
-#define RELAY_PIN   	LATEbits.LATE0
-#define RELAY_TRIS  	TRISEbits.TRISE0
-
-#define PROBE 			PORTAbits.RA1
-#define PROBE_TRIS	 	TRISAbits.TRISA1
-
-#endif
-
 #if TOAD_HW_VERSION==HW4
-
-// Note that you can't willy nilly re-arrange outputs as there is intricate details
-// in how the step and dir signals are updated in the high priority TMR2 interrupt
-// for example all STEP_n signals must be in the same port and all DIR_n in an
-// other port.
-
-#define STEP_OUTPUT_PORT LATD
-#define STEP_OUTPUT_ALL 0x0f
 
 #define STEP_X 				LATDbits.LATD0
 #define STEP_X_TRIS 		TRISDbits.TRISD0
@@ -312,9 +196,9 @@ extern u8 DUMMY_HOME_A;
 #define PROBE 				PORTAbits.RA1
 #define PROBE_TRIS	 		TRISAbits.TRISA1
 
-#define SPEED_POT_DIO 		PORTAbits.RA0
-#define SPEED_POT_ANSEL		ANSELAbits.ANSA0
-#define SPEED_POT_TRIS		TRISAbits.TRISA0
+#define SPEED_ANSEL			ANSELAbits.ANSA0
+#define SPEED_TRIS			TRISAbits.TRISA0
+#define SPEED_CHANNEL		0
 
 #define TORQUE_X 			PORTBbits.RB0
 #define TORQUE_X_TRIS		TRISBbits.TRISB0
@@ -345,4 +229,4 @@ extern u8 DUMMY_HOME_A;
 
 #endif
 
-#endif /* TOAD3_H_ */
+#endif

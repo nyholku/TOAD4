@@ -30,8 +30,8 @@
  * OF SUCH DAMAGE.
  */
 
-#ifndef COMMAND_QUEUE_H_
-#define COMMAND_QUEUE_H_
+#ifndef __COMMAND_QUEUE_H__
+#define __COMMAND_QUEUE_H__
 
 #include <stdint.h>
 #include "types.h"
@@ -39,6 +39,14 @@
 #include <pic18fregs.h>
 
 #define QUEUE_CAPACITY 8
+
+#define NUM_OF_MOTORS 4
+
+#define MOTOR_X 0
+#define MOTOR_Y 1
+#define MOTOR_Z 2
+#define MOTOR_4 3
+
 
 typedef volatile struct { // size 4 bytes
 	unsigned move_dir :1;
@@ -51,10 +59,10 @@ typedef volatile struct { // size 4 bytes
 	unsigned bit_7 :1;
 	volatile uint8_t  move_distance;
 	volatile uint16_t move_speed;
-} stepperCmd;
+} command_queue_element_t;
 
 typedef volatile struct { // size 8 * 4 = 32 bytes
-	volatile stepperCmd queue[QUEUE_CAPACITY];
+	volatile command_queue_element_t queue[QUEUE_CAPACITY];
 } command_queue_t;
 
 extern volatile command_queue_t __at( 0x0300) g_command_queues[NUMBER_OF_MOTORS];
@@ -99,4 +107,4 @@ extern volatile command_queue_t __at( 0x0300) g_command_queues[NUMBER_OF_MOTORS]
 
 typedef __data command_queue_t* command_queue_ptr_t;
 
-#endif /*TYPES_H_*/
+#endif

@@ -33,19 +33,17 @@
 
 # This is necessary so that pk2cmd (used by 'load' script) is found and for the
 # pk2cmd to find its support files (it seems to search current dir which is wrong)
-#PATH := ${PATH}:/Users/nyholku/TOAD3/pk2cmd:/usr/local/bin/
-PATH := ${PATH}:/Users/nyholku/TOAD3/pk2cmd:/usr/local/bin/
+PATH := ${PATH}
+
+UPLOADER := java -cp ~/EazyCNC-Project/classes:/Users/nyholku/PureJavaHidApi/bin/purejavahidapi.jar:/Users/Nyholku/PureJavaHidApi/lib/jna-4.0.0.jar diolanupdater.UpdateFirmware
+ENCODER := /Users/nyholku/diolan-plus2/encoder/build/encoder 
+HEXMATE :=  /Applications/microchip/mplabx/v3.55/mplab_ide.app/Contents/Resources/mplab_ide/bin/hexmate
 
 # The output file name
-TARGET = toad4.hex
+TARGET = toad4
 
 # The source files that make up the project go here 
-//SRCS =	 stepper.c cmdQueue.c cmdInterp.c usartirq.c main.c tests.c usbcdc.c
-//SRCS =	 stepper.c stepperirq.c main.c toad4.c usb_hid.c usb_core.c usb_pic_defs.c usb_user_config.c 
-SRCS =	  stepper.c main.c toad4.c usb_hid.c usb_core.c usb_pic_defs.c usb_user_config.c printft.c state_machine.c command_queue.c  crt0iz_toad4.c
-# SRCS =	 main2.c 
-# crt0iz_toad4.c
-#
+SRCS = main.c toad4.c usb_hid.c usb_core.c usb_pic_defs.c usb_user_config.c command_queue.c crt0iz_toad4.c
  
 # The libraries that are used go here
 LIBS =  libc18f.lib libio18f45k50.lib libm18f.lib libsdcc.lib 
@@ -55,7 +53,7 @@ SDCC = /Users/nyholku/sdcc-3.4.0/bin/sdcc
 
 # Compiler flags go here
 # --use-crt=crt0.o
-SDCCFLAGS = "-Wl -f 0xffff" --no-crt --ivt-loc=0x800 -V -L /Users/nyholku/sdcc-3.4.0/share/sdcc/non-free/lib/pic16 -Wa,-S,0 -Wl,-m,-s18f45k50.lkr -mpic16 -p18f45k50 --disable-warning 85 --std-sdcc99 --obanksel=3 --use-non-free
+SDCCFLAGS = "-Wl -f 0xffff" --verbose --no-crt --ivt-loc=0x800 -V -L /Users/nyholku/sdcc-3.4.0/share/sdcc/non-free/lib/pic16 -Wa,-S,0 -Wl,-m,-s18f45k50.lkr -mpic16 -p18f45k50 --disable-warning 85 --std-sdcc99 --obanksel=3 --use-non-free
 
 # Where to store the target/intermediate/temporary/object files
 OBJDIR = ../obj
@@ -86,24 +84,26 @@ OBJDIR = ../obj
 $(OBJDIR)/%.o: %.c $$(@D)/.f  
 	@echo $(PATH)
 	$(SDCC) -c $(SDCCFLAGS) $< -o $@
-    
-    
-#	$(SDCC) $(SDCCFLAGS) -o $(OBJDIR)/$(TARGET) $(addprefix $(OBJDIR)/, $(SRCS:.c=.o)) $(LIBS) $(OBJDIR)/hi_speed_irq.o
-
+   
+ KEY=${TOAD4PLUS_DIALON_KEY2} 
+   
 # Link the compiled files and libraries    
-$(OBJDIR)/$(TARGET): $(addprefix $(OBJDIR)/, $(SRCS:.c=.o))  $(OBJDIR)/hi_speed_irq.o
-	$(SDCC) $(SDCCFLAGS) -o $(OBJDIR)/$(TARGET) $(addprefix $(OBJDIR)/, $(SRCS:.c=.o)) $(LIBS) $(OBJDIR)/hi_speed_irq.o
-	../bootloader/encoder/build/encoder -ix ../obj/toad4.hex -ox ../obj/toad4-encoded.hex -e E03389975409007FA500138CF27636E9
-	java -cp ~/FirmwareUpdate/bin:/Users/nyholku//PureJavaHidApi/bin/purejavahidapi.jar:/Users/Nyholku/PureJavaHidApi/lib/jna-4.0.0.jar Test
-
-#	cp ../obj/toad4-encoded.hex ~/FirmwareUpdate/src
-#	cp ../obj/toad4.hex ~/FirmwareUpdate/src
-#	./load
-	
-	
-$(OBJDIR)/hi_speed_irq.o: hi_speed_irq.asm hi_speed_irq.h
+$(OBJDIR)/$(TARGET).hex: $(addprefix $(OBJDIR)/, $(SRCS:.c=.o))  $(OBJDIR)/hi_speed_irq.o
+	$(SDCC) $(SDCCFLAGS) -o $(OBJDIR)/$(TARGET).hex $(addprefix $(OBJDIR)/, $(SRCS:.c=.o)) $(LIBS) $(OBJDIR)/hi_speed_irq.o
+# normalize the code filling un-used code memory with 0xFF so that encoding always works on known data
+	$(HEXMATE) -o$(OBJDIR)/$(TARGET)-normalized.hex -fill=0xFF@0x0800:0x7FFF r0800-7FFF,$(OBJDIR)/$(TARGET).hex
+# sanitise the bootloader by keeping only the first 2kB (there is an extra jump code at 0x800 which overlaps with firmware code)
+	$(HEXMATE) -o$(OBJDIR)/bootloader-normalized.hex -fill=0xFF@0x0000:0x07FF r0000-07FF,../diolan-plus2/bootloader.hex r000802-FFFFFF,../diolan-plus2/bootloader.hex
+# combine the bootloader and firmware to one hex file that can be programmed with pickit ready to run
+	$(HEXMATE) -o$(OBJDIR)/$(TARGET)-pickit.hex -fill=0xFFFF@0xF00001:0xF000FF -fill=0xA5@0xF00000:0xF00000 -fill=0x00@0x300000:0x30000D $(OBJDIR)/$(TARGET)-normalized.hex ../obj/bootloader-normalized.hex
+# encode the bootloader for bootloading purposes, suppress output so as NOT to reveal the secret key
+	@$(ENCODER) -ix $(OBJDIR)/$(TARGET)-normalized.hex -ox $(OBJDIR)/$(TARGET)-encoded.hex -e ${TOAD4PLUS_DIALON_KEY2}
+# upload the encoded hex file using the bootload process
+	$(UPLOADER) $(OBJDIR)/$(TARGET)-encoded.hex
+  
+# Compile the high speed interrupt asm file	
+$(OBJDIR)/hi_speed_irq.o: hi_speed_irq.asm 
 	gpasm -DSTACK_MODEL_SMALL -D__STACK_MODEL_SMALL -o $(OBJDIR)/hi_speed_irq.o -c "hi_speed_irq.asm"
- 
 
 #
 #-------------------------------------------------------------------------------
@@ -135,7 +135,7 @@ $(OBJDIR)/%.dep: %.c $$(@D)/.f
 #
 # pretty standard default target
 #
-all:	$(OBJDIR)/$(TARGET)
+all:	$(OBJDIR)/$(TARGET).hex
 #
 #-------------------------------------------------------------------------------
 # 
@@ -154,14 +154,12 @@ clean:
 	rm -f $(OBJDIR)/*.o
 	rm -f $(OBJDIR)/*.dep
 	rm -f $(OBJDIR)/*.hex
-	rm -f $(OBJDIR)/$(TARGET)
 #	
 # cleanall deletes all in the object directory, do not use this if target dir == source dir
 cleanall:
 	rm $(OBJDIR)/*
 
 #-------------------------------------------------------------------------------
-	
    
     
     

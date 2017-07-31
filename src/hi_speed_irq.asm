@@ -14,6 +14,7 @@
 ;	global	_g_ready_flags
 	global  _g_stepper_states
 	global	_high_priority_interrupt_service
+	global	_g_pwm_out
 ;
 ;--------------------------------------------------------
 ; extern variables in this module
@@ -25,6 +26,7 @@
 	extern	_PIR1bits
 	extern	_LATD
 	extern	_PIR1
+	extern	_TMR0L
 ;
 ;--------------------------------------------------------
 ;	Equates to used internal registers
@@ -59,6 +61,7 @@ PRODH	equ	0xff4
 #define motor_size 26
 
 _g_stepper_states	res 4*motor_size
+_g_pwm_out			res	1
 ;_g_ready_flags 		res 1
 ;
 ;
@@ -236,8 +239,6 @@ _high_priority_interrupt_service:
 ;
 	BANKSEL	_g_stepper_states;
 ;
-;	LED_PIN = 1;
-;
 ;;;	BSF	_LATBbits, 4 ;// FIXME: THIS LINE JUST FOR TESTING
 ;
 ; FIXME, basically following is unnecessary also as this is the only hi priority interrupt....
@@ -255,7 +256,7 @@ _high_priority_interrupt_service:
 	MOVLW	0x0f
 	IORWF	_LATD, F
 ;
-	STEP_GENERATOR_MACRO MOTOR_X, STEP_X_PORT, STEP_X_BIT, DIR_X_PORT, DIR_X_BIT, 1
+	STEP_GENERATOR_MACRO MOTOR_X, STEP_X_PORT, STEP_X_BIT, DIR_X_PORT, DIR_X_BIT, 0
 ;
 	STEP_GENERATOR_MACRO MOTOR_Y, STEP_Y_PORT, STEP_Y_BIT, DIR_Y_PORT, DIR_Y_BIT, 0
 ;
@@ -264,10 +265,19 @@ _high_priority_interrupt_service:
 	STEP_GENERATOR_MACRO MOTOR_4, STEP_4_PORT, STEP_4_BIT, DIR_4_PORT, DIR_4_BIT, 0
 ;
 _00146_DS_:
-;	.line	157; stepperirq.c	LED_PIN = 0;
+;	.line	157; stepperirq.c
 ;;;	BCF	_LATBbits, 4 ;// FIXME: THIS LINE JUST FOR TESTING
 ;
 ;
+	MOVF    _g_pwm_out, W, B
+	SUBWF   _TMR0L, W
+	BC      pwmout0
+	BSF     _LATBbits, 3
+	BRA     pwmout1
+pwmout0:
+	BCF     _LATBbits, 3
+pwmout1:
+
 ;
 ;	MOVFF   PREINC1, BSR
 	RETFIE	0x01

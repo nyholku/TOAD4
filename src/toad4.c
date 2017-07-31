@@ -31,87 +31,23 @@
  */
 #include "toad4.h"
 
-volatile uint8_t g_sync_mask;
+typedef struct {
+	uint8_t fw_version_major;
+	uint8_t fw_version_minor;
+	uint8_t fw_version_bugfix;
+	uint8_t number_of_motors;
+	uint32_t nco_frequency;
+} g_toad4_config_t;
 
-
-#if TOAD_HW_VERSION==HW3
-
-u8 DUMMY_STEP_A;
-u8 DUMMY_DIR_A;
-u8 DUMMY_HOME_A;
-
-void initIO() {
-	// set pin to output
-	LED_TRIS = 0;
-	LED_PIN = 0;
-
-	STEP_X = 0;
-	DIR_X = 0;
-	ENABLE_X = 0;
-
-	STEP_Y = 0;
-	DIR_Y = 0;
-	ENABLE_Y = 0;
-
-	STEP_Z = 0;
-	DIR_Z = 0;
-	ENABLE_Z = 0;
-
-	MODE1_X = 0;
-	TQ1_X = 0;
-	TQ2_X = 0;
-	DCY1_X = 0;
-
-	MODE1_Y = 0;
-	TQ1_Y = 0;
-	TQ2_Y = 0;
-	DCY1_Y = 0;
-
-	MODE1_Z = 0;
-	TQ1_Z = 0;
-	TQ2_Z = 0;
-	DCY1_Z = 1;
-
-	STEP_X_TRIS = 0;
-	DIR_X_TRIS = 0;
-	ENABLE_X_TRIS = 0;
-	MODE1_X_TRIS = 0;
-	TQ1_X_TRIS = 0;
-	TQ2_X_TRIS = 0;
-	DCY1_X_TRIS = 0;
-	HOME_X_TRIS = 1;
-
-	STEP_Y_TRIS = 0;
-	DIR_Y_TRIS = 0;
-	ENABLE_Y_TRIS = 0;
-	MODE1_Y_TRIS = 0;
-	TQ1_Y_TRIS = 0;
-	TQ2_Y_TRIS = 0;
-	DCY1_Y_TRIS = 0;
-	HOME_Y_TRIS = 1;
-
-	STEP_Z_TRIS = 0;
-	DIR_Z_TRIS = 0;
-	ENABLE_Z_TRIS = 0;
-	MODE1_Z_TRIS = 0;
-	TQ1_Z_TRIS = 0;
-	TQ2_Z_TRIS = 0;
-	DCY1_Z_TRIS = 0;
-	HOME_Z_TRIS = 1;
-
-	RELAY_PIN = 0;
-	RELAY_TRIS = 0;
-
-	PROBE_TRIS = 1;
-
-	ADCON1 = 0x0f;
-
-}
-
-#endif
+__code g_toad4_config_t g_toad4_config = {
+		FW_VERSION_MAJOR,
+		FW_VERSION_MINOR,
+		FW_VERSION_BUGFIX,
+		NUMBER_OF_MOTORS,
+		NCO_FREQUENCY
+};
 
 #if TOAD_HW_VERSION==HW4
-
 
 void initIO() {
 	ANSELA = 0x01;
@@ -194,11 +130,6 @@ void initIO() {
 
 	PROBE_TRIS = 1;
 
-	SPEED_POT_TRIS =1;
-	SPEED_POT_ANSEL = 1;
-
-	ADCON0 = 0x01;
-	ADCON1 = 0x00;
 
 	// PWM setup
     T2CONbits.TMR2ON = 0;  // Turn the timer off
@@ -221,6 +152,39 @@ void initIO() {
 
     T2CONbits.TMR2ON = 1; // Turn the PWM on
 
+    // ADC Port configuration
+
+    //ANSELAbits.ANSA0=1; // AN0
+    //TRISAbits.TRISA0=1; // RA0
+
+	SPEED_ANSEL = 1;
+	SPEED_TRIS = 1;
+    // ADC channel selection
+
+	// NOTE! sdcc 3.4.0 include file "pic18f45k50.h" is missing the definition for ADCON0bits.CHS so it must be patched there
+    ADCON0bits.CHS = SPEED_CHANNEL;
+
+    // ADC voltage reference
+
+    ADCON1bits.PVCFG0 =0; // Vref+ = AVdd
+    ADCON1bits.NVCFG1 =0; // Vref- = AVss
+
+    // ADC conversion clock source
+
+    ADCON2bits.ADCS=6; // timing 1.3 usec @ Fosc 48 MHz
+    ADCON2bits.ACQT=1;
+
+    // Results formatting
+
+    ADCON2bits.ADFM=0;  // ADRES = ADRESH = 8 MSB of 10 bit result
+
+    // Turn ADC  on
+
+    ADCON0bits.ADON=1;
 	}
+
+__code void* get_toad4_config() {
+	return &g_toad4_config;
+}
 
 #endif

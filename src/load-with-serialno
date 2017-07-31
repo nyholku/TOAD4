@@ -1,0 +1,7 @@
+SRC="../obj/toad4-pickit.hex"
+DST="../obj/toad4-pickit-with-serialno.hex"
+SERNO=`python serialno.py`
+REPLACE=":107FC00000000000000000000000000000000000B1"
+sed "s/$REPLACE/$SERNO/g" <$SRC >$DST
+../pk2cmd/pk2cmd -b../pk2cmd -f$DST -pPIC18f45k50 -e -m -j -r
+

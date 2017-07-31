@@ -115,6 +115,8 @@ __code uint16_t string_descriptor_2[] = { // Manufacturer
 		USB_PRODUCT_STRING //
 		};
 
+__code __at 0x7FC0 uint16_t string_descriptor_3[32] = {0};
+
 void prepare_for_setup_stage(void) {
 	control_stage = SETUP_STAGE;
 	ep0_o.CNT = E0SZ;
@@ -145,6 +147,8 @@ static void get_descriptor(void) {
 				code_ptr = (codePtr) &string_descriptor_1;
 			} else if (descriptorIndex == 2) {
 				code_ptr = (codePtr) &string_descriptor_2;
+			} else if (descriptorIndex == 3) {
+				code_ptr = (codePtr) &string_descriptor_3;
 			} else {
 				request_handled = 0;
 			}

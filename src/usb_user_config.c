@@ -28,7 +28,7 @@ __code usb_dev_desc_t device_descriptor = { //
 				0x0100,                 // bcdDevice
 				0x01,                   // iManufacturer
 				0x02,                   // iProduct
-				0x00,                   // iSerialNumber
+				0x03,                   // iSerialNumber
 				0x01                    // bNumConfigurations
 		};
 

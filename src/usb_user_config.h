@@ -3,8 +3,8 @@
  *
  */
 
-#ifndef USB_USER_CONFIG_H_
-#define USB_USER_CONFIG_H_
+#ifndef __USB_USER_CONFIG_H_
+#define __USB_USER_CONFIG_H_
 
 #include "usb_defs.h"
 
@@ -15,6 +15,7 @@
 
 #define USB_MANUFACTURER_STRING  'S', 'p', 'a', 'r', 'e', 'T', 'i', 'm', 'e', 'L', 'a', 'b', 's'
 #define USB_PRODUCT_STRING 'T', 'O', 'A', 'D', '4' , '+'
+#define USB_SERIAL_NUMBER_STRING '0', '0', '0', '0', '0', '0', '0'
 
 codePtr usb_user_get_device_descriptor();
 codePtr usb_user_get_configuration_descriptor();

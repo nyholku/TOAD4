@@ -30,8 +30,8 @@
  * OF SUCH DAMAGE.
  */
 
-#ifndef USB_CORE_H_
-#define USB_CORE_H_
+#ifndef __USB_CORE_H__
+#define __USB_CORE_H__
 
 #include "usb_defs.h"
 #include "usb_user_config.h"

@@ -708,7 +708,7 @@ void main(void) {
 }
 
 
-
+// TEST
 
 // hid_rx_buffer.uint8[49]; current control (common to all motors? , would break symmetry
 // hid_rx_buffer.uint8[50]; digital outputs 0-7

@@ -111,6 +111,7 @@ typedef struct {
 	stepper_status_t steppers[6];
 } toad4_status_t;
 
+static uint8_t g_group_masks[NUMBER_OF_MOTORS];
 
 static uint8_t g_blink_speed = 0;
 
@@ -152,27 +153,22 @@ static uint8_t g_ADCresult;
 
 #define INIT_MOTOR(i) do { \
 	g_toad4_status.steppers[i].position = 0; \
-	g_stepper_states[i].has_last = 0; \
 	g_stepper_states[i].next_dir = 0; \
 	g_stepper_states[i].last_dir = 0; \
 	g_stepper_states[i].next_steps = 0; \
 	g_stepper_states[i].last_steps = 0; \
-	g_stepper_states[i].ready = 1; \
-	g_stepper_states[i].ready2 = 1; \
-	g_stepper_states[i].not_busy = 1; \
-	g_stepper_states[i].not_busy2 = 1; \
-	g_stepper_states[i].in_sync = 1; \
 	g_stepper_states[i].steps = 0; \
 	g_stepper_states[i].speed = 0; \
 	g_stepper_states[i].position = 0; \
-	g_stepper_states[i].sync_group = 0; \
-	g_stepper_states[i].state= 0; \
+	g_stepper_states[i].sync_group = i; \
+	g_stepper_states[i].busy_mask = 0xFF; \
+	g_stepper_states[i].ready_mask = 0xFF; \
 	QUEUE_CLEAR(i); \
 } while(0)
 
 #define UPDATE_POS(i) do { \
-	if (STEPPER(i).ready && !STEPPER(i).ready2){ \
-		STEPPER(i).ready2 = 1; \
+	if (STEPPER(i).update_pos){ \
+		STEPPER(i).update_pos = 0; \
 		if (STEPPER(i).last_dir) \
 			STEPPER(i).position += STEPPER(i).last_steps; \
 		else \
@@ -180,18 +176,10 @@ static uint8_t g_ADCresult;
 		BITCPY(STEPPER(i).last_dir,STEPPER(i).next_dir); \
 		STEPPER(i).last_steps = STEPPER(i).next_steps; \
 		}\
-	if (STEPPER(i).not_busy && !STEPPER(i).not_busy2) { \
-		STEPPER(i).not_busy2 = 1; \
-		g_sync_counter[ STEPPER(i).sync_group ]--; \
-		}\
-	}while(0)
-
-#define UPDATE_SYNC(i) do { \
-		STEPPER(i).in_sync = g_sync_counter[ STEPPER(i).sync_group ] == 0; \
 	}while(0)
 
 #define FEED_MORE(i) do { \
-	if (STEPPER(i).ready && !QUEUE_EMPTY(i) && STEPPER(i).in_sync) { \
+	if (g_ready_flags.ready_##i && !QUEUE_EMPTY(i) ) { \
 		/* int16_t distance = QUEUE_FRONT(i)->move_distance; */ \
 		int8_t distance = QUEUE_FRONT(i)->move_distance; \
 		BITCPY(STEPPER(i).next_dir,QUEUE_FRONT(i)->move_dir); \
@@ -200,11 +188,7 @@ static uint8_t g_ADCresult;
 		if ((QUEUE_FRONT(i)->move_distance -= distance) == 0) { \
 			QUEUE_POP(i); \
 			} \
-		g_sync_counter[ STEPPER(i).sync_group ]++; \
-		STEPPER(i).not_busy2 = 0; \
-		STEPPER(i).ready2 = 0; \
-		STEPPER(i).ready = 0; \
-		STEPPER(i).not_busy = 0; \
+		g_ready_flags.ready_##i = 0; \
 		} \
 	}while(0)
 
@@ -227,64 +211,9 @@ static uint8_t g_ADCresult;
 		} \
 	}while(0)
 
-
-#define READ_HOME(i) do {\
-	if (HOME_##i) \
-		g_toad4_status.steppers[i].home = 1; \
-	else \
-		g_toad4_status.steppers[i].home = 0; \
-	}while(0)
-
-#define UPDATE_JOG(i) do { \
-	if (QUEUE_EMPTY(i) && (STEPPER(i).jog_on || STEPPER(i).jog_speed)) { \
-		if (STEPPER(i).jog_on) { \
-			STEPPER(i).jog_on = 0; \
-			if (STEPPER(i).jog_speed < STEPPER(i).max_speed - STEPPER(i).max_accel) \
-				STEPPER(i).jog_speed += STEPPER(i).max_accel; \
-			else \
-				STEPPER(i).jog_speed = STEPPER(i).max_speed; \
-			} \
-		else { \
-			if (STEPPER(i).jog_speed > STEPPER(i).max_accel) \
-				STEPPER(i).jog_speed -= STEPPER(i).max_accel; \
-			else {\
-				STEPPER(i).jog_speed = 0; \
-				break; \
-				} \
-			} \
-		{ \
-			int16_t n = STEPPER(i).jog_speed_hi; /* jog_speed/256 */ \
-			if (n==0) \
-				n=1; \
-			n <<= 3; \
-			if (STEPPER(i).jog_reverse) \
- 	 	 	 	n=-n; /* jog_speed/256*8 */\
-			QUEUE_REAR(i)->move_distance = n; \
-			QUEUE_REAR(i)->move_speed = STEPPER(i).jog_speed; \
-			QUEUE_PUSH(i);	\
-		}\
-		} \
-	}while(0)
-
-#define UPDATE_PROBE(i) do { \
-	if (g_probe) { \
-		if (STEPPER(i).probeTrigOnRising) { \
-			STEPPER(i).probeTriggered = 1; \
-			STEPPER(i).probeTrigOnRising = 0; \
-			} \
-	} else { \
-		if (STEPPER(i).probeTrigOnFalling) { \
-			STEPPER(i).probeTriggered = 1; \
-			STEPPER(i).probeTrigOnFalling = 0; \
-			} \
-		} \
-	}while(0)
-
-
 #define PROCESS_MOTOR_COMMANDS(i)  do { \
 	uint8_t cmd = hid_rx_buffer.uint8[i*8+0]; \
 	uint8_t flags = hid_rx_buffer.uint8[i*8+1]; \
-	STEPPER(i).sync_group = flags & 0x0F; \
 	if (flags & 0x10) \
 		ENABLE_MOTOR(i,1); \
 	else \
@@ -307,17 +236,27 @@ static uint8_t g_ADCresult;
 	if (!g_probe.probe_triggered) \
 		g_toad4_status.steppers[i].position = get_position(i); \
 	g_toad4_status.steppers[i].queue_state =QUEUE_SIZE(i)+(QUEUE_CAPACITY<<4); \
-	if (!STEPPER(i).not_busy2) \
+	if (g_busy_flags.busy_##i) \
 		g_toad4_status.steppers[i].queue_state++; \
-	BITCPY(g_toad4_status.steppers[i].ready , STEPPER(i).ready); \
-	BITCPY(g_toad4_status.steppers[i].ready2 , STEPPER(i).ready2); \
-	BITCPY(g_toad4_status.steppers[i].not_busy , STEPPER(i).not_busy); \
-	BITCPY(g_toad4_status.steppers[i].not_busy2 , STEPPER(i).not_busy2); \
-	BITCPY(g_toad4_status.steppers[i].in_sync,STEPPER(i).in_sync); \
-	BITCPY(g_toad4_status.steppers[i].not_empty , !QUEUE_EMPTY(i)); \
 	BITCPY(g_toad4_status.steppers[i].home , HOME_##i); \
-	g_toad4_status.steppers[i].sync_counter = g_sync_counter[ STEPPER(i).sync_group ]; \
 	}while(0)
+
+
+#define UPDATE_SYNC_GROUP(i) \
+	STEPPER(i).sync_group = hid_rx_buffer.uint8[i*8+1] & 0x07
+
+#define UPDATE_GROUP_MASK_1(i) \
+		g_group_masks[i] = 0
+
+#define UPDATE_GROUP_MASK_2(i) do {\
+		g_group_masks[STEPPER(i).sync_group] |= 1 << i; \
+		} while (0)
+
+#define UPDATE_GROUP_MASK_3(i) do {\
+		STEPPER(i).busy_mask = g_group_masks[STEPPER(i).sync_group]; \
+		STEPPER(i).busy_mask &= ~(1 << i); \
+		STEPPER(i).ready_mask = g_group_masks[STEPPER(i).sync_group]; \
+		} while (0)
 
 
 #define UPDATE_OUTPUTS(x)  do { \
@@ -452,7 +391,7 @@ void low_priority_interrupt_service() __interrupt(2) {
 
 
 		FOR_EACH_MOTOR_DO(UPDATE_POS);
-		FOR_EACH_MOTOR_DO(UPDATE_SYNC);
+		//FOR_EACH_MOTOR_DO(UPDATE_SYNC);
 		FOR_EACH_MOTOR_DO(FEED_MORE);
 
 	} // End of 'software' interrupt processing
@@ -527,10 +466,17 @@ void check_probe() {
 		g_probe.probe_triggered = 1;
 }
 
+uint8_t g_debug_cnt=0;
+
 void main(void) {
 	initIO();
 
+	g_ready_flags.ready_bits = 0xFF;
+	g_busy_flags.busy_bits = 0x00;
 	FOR_EACH_MOTOR_DO(INIT_MOTOR);
+	FOR_EACH_MOTOR_DO(UPDATE_GROUP_MASK_1);
+	FOR_EACH_MOTOR_DO(UPDATE_GROUP_MASK_2);
+	FOR_EACH_MOTOR_DO(UPDATE_GROUP_MASK_3);
 
 	TRISCbits.TRISC6 = 0;
 
@@ -628,6 +574,12 @@ void main(void) {
 			}
 			else { // normal message
 				g_special_request = 0;
+				if (1) {
+				FOR_EACH_MOTOR_DO(UPDATE_SYNC_GROUP);
+				FOR_EACH_MOTOR_DO(UPDATE_GROUP_MASK_1);
+				FOR_EACH_MOTOR_DO(UPDATE_GROUP_MASK_2);
+				FOR_EACH_MOTOR_DO(UPDATE_GROUP_MASK_3);
+
 				FOR_EACH_MOTOR_DO(PROCESS_MOTOR_COMMANDS);
 
 				UPDATE_OUTPUTS(hid_rx_buffer.uint8[50]);
@@ -641,6 +593,18 @@ void main(void) {
 
 				// trig sw interrupt so that the queues get updated
 				PIR1bits.CCP1IF = 1;
+				}
+				else {
+					ENABLE_MOTOR(0,1); \
+					if (QUEUE_EMPTY(0)) {
+						QUEUE_REAR(0)->move_dir = 0;
+						QUEUE_REAR(0)->move_distance = 255;
+						QUEUE_REAR(0)->move_speed = 100;
+						QUEUE_PUSH(0);
+						PIR1bits.CCP1IF = 1;
+
+					}
+				}
 
 			}
 			// turn the buffer over to SIE so we can get more data
@@ -675,7 +639,7 @@ void main(void) {
 				memcpyram2ram(&hid_tx_buffer.uint8[0], &g_toad4_status.steppers[0],8);
 				memcpyram2ram(&hid_tx_buffer.uint8[8], &g_toad4_status.steppers[1],8);
 				memcpyram2ram(&hid_tx_buffer.uint8[16], &g_toad4_status.steppers[2],8);
-				memcpyram2ram(&hid_tx_buffer.uint8[32], &g_toad4_status.steppers[3],8);
+				memcpyram2ram(&hid_tx_buffer.uint8[24], &g_toad4_status.steppers[3],8);
 
 				// 6*8 = 48
 				//FOR_EACH_MOTOR_DO(READ_HOME);
@@ -684,15 +648,16 @@ void main(void) {
 				hid_tx_buffer.uint8[50] = PORTA;//0; // digital inputs 0-7
 				hid_tx_buffer.uint8[51] = 0; // digital inputs 8-15
 				hid_tx_buffer.uint8[52] = g_ADCresult; // analog input 0
-				hid_tx_buffer.uint8[53] = 0;
-				hid_tx_buffer.uint8[54] = 0;
-				hid_tx_buffer.uint8[55] = 0;
-				hid_tx_buffer.uint8[56] = 0;
-				hid_tx_buffer.uint8[57] = 0;
-				hid_tx_buffer.uint8[58] = 0;
-				hid_tx_buffer.uint8[59] = 0;
-				hid_tx_buffer.uint8[60] = 0;
-				hid_tx_buffer.uint8[61] = 0;
+				hid_tx_buffer.uint8[53] = g_stepper_states[0].steps;
+				hid_tx_buffer.uint8[54] = g_stepper_states[1].steps;
+				hid_tx_buffer.uint8[55] = g_stepper_states[2].steps;
+				hid_tx_buffer.uint8[56] = g_stepper_states[3].steps;
+				hid_tx_buffer.uint8[57] = g_stepper_states[0].busy_mask;
+				hid_tx_buffer.uint8[58] = g_stepper_states[1].busy_mask;
+				hid_tx_buffer.uint8[59] = g_stepper_states[2].busy_mask;
+				hid_tx_buffer.uint8[60] = g_stepper_states[3].busy_mask;
+				hid_tx_buffer.uint8[61] = g_busy_flags.busy_bits;
+				hid_tx_buffer.uint8[62] = g_ready_flags.ready_bits;
 			}
 			// turn the buffer over to the SIE so the host will pick it up
 			ep2_i.CNT = 64;
@@ -704,15 +669,4 @@ void main(void) {
 
 		blink_led();
 	}
-
 }
-
-
-// TEST
-
-// hid_rx_buffer.uint8[49]; current control (common to all motors? , would break symmetry
-// hid_rx_buffer.uint8[50]; digital outputs 0-7
-// hid_rx_buffer.uint8[51]; digital outputs 8-15
-// hid_rx_buffer.uint8[52]; analog output 0
-// hid_rx_buffer.uint8[53]; analog output 1
-

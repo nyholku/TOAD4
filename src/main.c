@@ -178,16 +178,27 @@ static uint8_t g_ADCresult;
 		}\
 	}while(0)
 
+
+
 #define FEED_MORE(i) do { \
 	if (g_ready_flags.ready_##i && !QUEUE_EMPTY(i) ) { \
-		/* int16_t distance = QUEUE_FRONT(i)->move_distance; */ \
-		int8_t distance = QUEUE_FRONT(i)->move_distance; \
-		BITCPY(STEPPER(i).next_dir,QUEUE_FRONT(i)->move_dir); \
+		int16_t distance = QUEUE_FRONT(i)->move_distance;  \
+		if (distance < 0) { \
+			STEPPER(i).next_dir = 0; \
+			distance = -distance; \
+			} \
+		else \
+			STEPPER(i).next_dir = 1; \
+		if (distance > 255) \
+			distance = 255; \
 		STEPPER(i).next_steps = distance; \
 		STEPPER(i).next_speed = QUEUE_FRONT(i)->move_speed; \
-		if ((QUEUE_FRONT(i)->move_distance -= distance) == 0) { \
+		if (STEPPER(i).next_dir) \
+			QUEUE_FRONT(i)->move_distance -= distance; \
+		else \
+			QUEUE_FRONT(i)->move_distance += distance; \
+		if (QUEUE_FRONT(i)->move_distance == 0) \
 			QUEUE_POP(i); \
-			} \
 		g_ready_flags.ready_##i = 0; \
 		} \
 	}while(0)
@@ -219,10 +230,11 @@ static uint8_t g_ADCresult;
 	else \
 		ENABLE_MOTOR(i,0); \
 	if (cmd == CMD_MOVE) { \
-		uint8_t dist = hid_rx_buffer.uint8[i*8+2]; \
+		/* uint8_t dist = hid_rx_buffer.uint8[i*8+2]; */ \
+		uint16_t dist = hid_rx_buffer.uint16[i*4+1]; \
 		uint8_t dir = hid_rx_buffer.uint8[i*8+3]; \
 		uint16_t speed = hid_rx_buffer.uint16[i*4+2]; \
-		QUEUE_REAR(i)->move_dir = dir; \
+		/* QUEUE_REAR(i)->move_dir = dir; */ \
 		QUEUE_REAR(i)->move_distance = dist; \
 		QUEUE_REAR(i)->move_speed = speed; \
 		QUEUE_PUSH(i); \
@@ -248,15 +260,11 @@ static uint8_t g_ADCresult;
 #define UPDATE_GROUP_MASK_1(i) \
 		g_group_masks[i] = 0
 
-#define UPDATE_GROUP_MASK_2(i) do {\
-		g_group_masks[STEPPER(i).sync_group] |= 1 << i; \
-		} while (0)
+#define UPDATE_GROUP_MASK_2(i) \
+		g_group_masks[STEPPER(i).sync_group] |= 1 << i
 
-#define UPDATE_GROUP_MASK_3(i) do {\
-		STEPPER(i).busy_mask = g_group_masks[STEPPER(i).sync_group]; \
-		STEPPER(i).busy_mask &= ~(1 << i); \
-		STEPPER(i).ready_mask = g_group_masks[STEPPER(i).sync_group]; \
-		} while (0)
+#define UPDATE_GROUP_MASK_3(i) \
+		STEPPER(i).ready_mask = g_group_masks[STEPPER(i).sync_group]
 
 
 #define UPDATE_OUTPUTS(x)  do { \
@@ -574,7 +582,6 @@ void main(void) {
 			}
 			else { // normal message
 				g_special_request = 0;
-				if (1) {
 				FOR_EACH_MOTOR_DO(UPDATE_SYNC_GROUP);
 				FOR_EACH_MOTOR_DO(UPDATE_GROUP_MASK_1);
 				FOR_EACH_MOTOR_DO(UPDATE_GROUP_MASK_2);
@@ -593,19 +600,6 @@ void main(void) {
 
 				// trig sw interrupt so that the queues get updated
 				PIR1bits.CCP1IF = 1;
-				}
-				else {
-					ENABLE_MOTOR(0,1); \
-					if (QUEUE_EMPTY(0)) {
-						QUEUE_REAR(0)->move_dir = 0;
-						QUEUE_REAR(0)->move_distance = 255;
-						QUEUE_REAR(0)->move_speed = 100;
-						QUEUE_PUSH(0);
-						PIR1bits.CCP1IF = 1;
-
-					}
-				}
-
 			}
 			// turn the buffer over to SIE so we can get more data
 			ep2_o.CNT = 64;

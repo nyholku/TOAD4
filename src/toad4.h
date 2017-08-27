@@ -40,6 +40,35 @@
 
 __code void* get_toad4_config();
 
+
+extern union {
+struct {
+	unsigned busy_0 :1; // bit 0
+	unsigned busy_1 :1;
+	unsigned busy_2 :1;
+	unsigned busy_3 :1;
+	unsigned busy_4 :1;
+	unsigned busy_5 :1;
+	unsigned busy_6 :1;
+	unsigned busy_7 :1;
+};
+	uint8_t busy_bits;
+} g_busy_flags;
+
+extern union {
+struct {
+	unsigned ready_0 :1; // bit 0
+	unsigned ready_1 :1;
+	unsigned ready_2 :1;
+	unsigned ready_3 :1;
+	unsigned ready_4 :1;
+	unsigned ready_5 :1;
+	unsigned ready_6 :1;
+	unsigned ready_7 :1;
+};
+	uint8_t ready_bits;
+} g_ready_flags;
+
 // note all this is referenced from assembler so do-not rearrange at willy-nilly
 typedef volatile struct {
 	uint16_t nco; // offset 0
@@ -50,71 +79,26 @@ typedef volatile struct {
 	uint8_t last_steps; // offset 8
 	union {
 	struct { //offset 9
-		unsigned in_sync :1; // bit 0
+		unsigned update_pos :1; // bit 0
 		unsigned next_dir :1;
 		unsigned last_dir :1;
-		unsigned has_last :1;
-		unsigned ready :1;
-		unsigned ready2 :1;
-		unsigned not_busy :1;
-		unsigned not_busy2 :1; // bit 7
+		unsigned bit_3 :1;
+		unsigned bit_4 :1;
+		unsigned bit_5 :1;
+		unsigned bit_6 :1;
+		unsigned bit_7 :1;
 	};
 		uint8_t flags;
 	};
-	uint8_t queue_size; // offset 10
-	uint8_t queue_rear; // offset 11
-	uint8_t queue_front; // offset 12
-	int32_t position; // offset 13
-	uint8_t sync_group; // offset 17
-// size this far 18
-	uint8_t state;
-	uint16_t jog_speed_OBSOLETE;
-	uint16_t max_accel_OBSOLETE;
-	uint16_t max_speed_OBSOLETE;
-	union {
-	struct {
-		unsigned jog_on :1; // bit 0
-		unsigned jog_reverse :1;
-		unsigned seek_home :1;
-		unsigned seek_not_home :1;
-		unsigned seek_reverse :1;
-		unsigned probeTriggered :1;
-		unsigned probeTrigOnRising :1;
-		unsigned probeTrigOnFalling :1; // bit 7
-	};
-		uint8_t flags2;
-	};
-// size this far 26
+	uint8_t ready_mask; // offset 10
+	uint8_t busy_mask; // offset 11
+	uint8_t queue_size;  // offset 12
+	uint8_t queue_rear; // offset 13
+	uint8_t queue_front; // offset 14
+	uint32_t position; // offset 15
+	uint8_t sync_group; // offset 19
+// size this far 20
 } stepper_state_t;
-
-typedef volatile struct {
-	struct { // packing 'booleans' like this into one bit fields allows faster code generation on SDCC
-		unsigned irq_flag :1; // High priority interrupt clears this
-		unsigned reserve_b1 :1;
-		unsigned reserve_b2 :1;
-		unsigned reserve_b3 :1;
-		unsigned reserve_b4 :1;
-		unsigned reserve_b5 :1;
-		unsigned reserve_b6 :1;
-		unsigned reserve_b7 :1;
-	};
-} irq_flags_t;
-
-typedef volatile struct {
-	union {
-		struct { // packing 'booleans' like this into one bit fields allows faster code generation on SDCC
-			unsigned stepper_0 :1; // High priority interrupt clears this
-			unsigned stepper_1 :1;
-			unsigned stepper_2 :1;
-			unsigned stepper_3 :1;
-			unsigned stepper_4 :1;
-			unsigned stepper_5 :1;
-			unsigned stepper_6 :1;
-			unsigned stepper_7 :1;
-		};
-		uint8_t all_steppers;
-	};
-} stepper_flags_t;
 
 extern volatile stepper_state_t g_stepper_states[NUMBER_OF_MOTORS];
 
@@ -132,7 +116,7 @@ extern volatile stepper_state_t g_stepper_states[NUMBER_OF_MOTORS];
 
 #define FW_VERSION_MAJOR 2
 #define FW_VERSION_MINOR 0
-#define FW_VERSION_BUGFIX 0
+#define FW_VERSION_BUGFIX 1
 
 #define NCO_FREQUENCY 100000
 

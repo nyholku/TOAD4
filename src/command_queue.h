@@ -49,8 +49,8 @@
 
 
 typedef volatile struct { // size 4 bytes
-	unsigned move_dir :1;
-	unsigned bit1 :1;
+	unsigned move_dir :1; // bit 0
+	unsigned bit_1 :1;
 	unsigned bit_2 :1;
 	unsigned bit_3 :1;
 	unsigned bit_4 :1;

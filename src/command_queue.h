@@ -49,15 +49,7 @@
 
 
 typedef volatile struct { // size 4 bytes
-	unsigned move_dir :1; // bit 0
-	unsigned bit_1 :1;
-	unsigned bit_2 :1;
-	unsigned bit_3 :1;
-	unsigned bit_4 :1;
-	unsigned bit_5 :1;
-	unsigned bit_6 :1;
-	unsigned bit_7 :1;
-	volatile uint8_t  move_distance;
+	volatile int16_t move_distance;
 	volatile uint16_t move_speed;
 } command_queue_element_t;
 

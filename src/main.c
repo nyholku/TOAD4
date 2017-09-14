@@ -181,25 +181,37 @@ static uint8_t g_ADCresult;
 
 
 #define FEED_MORE(i) do { \
-	if (g_ready_flags.ready_##i && !QUEUE_EMPTY(i) ) { \
-		int16_t distance = QUEUE_FRONT(i)->move_distance;  \
-		if (distance < 0) { \
-			STEPPER(i).next_dir = 0; \
-			distance = -distance; \
+	if (g_ready_flags.ready_##i)  { \
+		if (QUEUE_EMPTY(i)) { \
+			if (!STEPPER(i).empty) { \
+				STEPPER(i).empty = 1; \
+				STEPPER(i).update_pos = 1; \
+				STEPPER(i).next_steps = 0; \
+				/* trig sw interrupt so that update gets processed */ \
+				PIR1bits.CCP1IF = 1;  \
+				} \
 			} \
-		else \
-			STEPPER(i).next_dir = 1; \
-		if (distance > 255) \
-			distance = 255; \
-		STEPPER(i).next_steps = distance; \
-		STEPPER(i).next_speed = QUEUE_FRONT(i)->move_speed; \
-		if (STEPPER(i).next_dir) \
-			QUEUE_FRONT(i)->move_distance -= distance; \
-		else \
-			QUEUE_FRONT(i)->move_distance += distance; \
-		if (QUEUE_FRONT(i)->move_distance == 0) \
-			QUEUE_POP(i); \
-		g_ready_flags.ready_##i = 0; \
+		else{ \
+			int16_t distance = QUEUE_FRONT(i)->move_distance;  \
+			if (distance < 0) { \
+				STEPPER(i).next_dir = 0; \
+				distance = -distance; \
+				} \
+			else \
+				STEPPER(i).next_dir = 1; \
+			if (distance > 255) \
+				distance = 255; \
+			STEPPER(i).next_steps = distance; \
+			STEPPER(i).next_speed = QUEUE_FRONT(i)->move_speed; \
+			if (STEPPER(i).next_dir) \
+				QUEUE_FRONT(i)->move_distance -= distance; \
+			else \
+				QUEUE_FRONT(i)->move_distance += distance; \
+			if (QUEUE_FRONT(i)->move_distance == 0) \
+				QUEUE_POP(i); \
+			g_ready_flags.ready_##i = 0; \
+			STEPPER(i).empty = 0; \
+			} \
 		} \
 	}while(0)
 
@@ -232,7 +244,7 @@ static uint8_t g_ADCresult;
 	if (cmd == CMD_MOVE) { \
 		/* uint8_t dist = hid_rx_buffer.uint8[i*8+2]; */ \
 		uint16_t dist = hid_rx_buffer.uint16[i*4+1]; \
-		uint8_t dir = hid_rx_buffer.uint8[i*8+3]; \
+		/* uint8_t dir = hid_rx_buffer.uint8[i*8+3]; */ \
 		uint16_t speed = hid_rx_buffer.uint16[i*4+2]; \
 		/* QUEUE_REAR(i)->move_dir = dir; */ \
 		QUEUE_REAR(i)->move_distance = dist; \
@@ -363,6 +375,9 @@ int32_t get_position(uint8_t i) {
 		dlt = g_stepper_states[i].last_steps - g_stepper_states[i].steps;
 		pos = g_stepper_states[i].position;
 		dir = g_stepper_states[i].last_dir;
+
+		// busy => high speed interrupt has not yet transferred next_steps to steps,
+		// meaning last_steps is wrong?
 	} while (stp != g_low_pri_isr_guard);
 	if (dir)
 		pos += dlt;
@@ -398,10 +413,9 @@ void low_priority_interrupt_service() __interrupt(2) {
 		PIR1bits.CCP1IF = 0;
 
 
-		FOR_EACH_MOTOR_DO(UPDATE_POS);
 		//FOR_EACH_MOTOR_DO(UPDATE_SYNC);
+		FOR_EACH_MOTOR_DO(UPDATE_POS);
 		FOR_EACH_MOTOR_DO(FEED_MORE);
-
 	} // End of 'software' interrupt processing
 
 	if (PIR2bits.TMR3IF) {
@@ -643,13 +657,13 @@ void main(void) {
 				hid_tx_buffer.uint8[51] = 0; // digital inputs 8-15
 				hid_tx_buffer.uint8[52] = g_ADCresult; // analog input 0
 				hid_tx_buffer.uint8[53] = g_stepper_states[0].steps;
-				hid_tx_buffer.uint8[54] = g_stepper_states[1].steps;
-				hid_tx_buffer.uint8[55] = g_stepper_states[2].steps;
-				hid_tx_buffer.uint8[56] = g_stepper_states[3].steps;
-				hid_tx_buffer.uint8[57] = g_stepper_states[0].busy_mask;
-				hid_tx_buffer.uint8[58] = g_stepper_states[1].busy_mask;
-				hid_tx_buffer.uint8[59] = g_stepper_states[2].busy_mask;
-				hid_tx_buffer.uint8[60] = g_stepper_states[3].busy_mask;
+				hid_tx_buffer.uint8[54] = g_stepper_states[0].last_steps;
+				hid_tx_buffer.uint8[55] = g_stepper_states[0].next_steps;
+				hid_tx_buffer.uint8[56] = g_stepper_states[0].empty;
+				hid_tx_buffer.uint8[57] = g_stepper_states[0].update_pos;
+				hid_tx_buffer.uint8[58] = 0;
+				hid_tx_buffer.uint8[59] = 0;
+				hid_tx_buffer.uint8[60] = 0;
 				hid_tx_buffer.uint8[61] = g_busy_flags.busy_bits;
 				hid_tx_buffer.uint8[62] = g_ready_flags.ready_bits;
 			}

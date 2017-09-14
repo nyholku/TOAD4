@@ -82,7 +82,7 @@ typedef volatile struct {
 		unsigned update_pos :1; // bit 0
 		unsigned next_dir :1;
 		unsigned last_dir :1;
-		unsigned bit_3 :1;
+		unsigned empty :1;
 		unsigned bit_4 :1;
 		unsigned bit_5 :1;
 		unsigned bit_6 :1;
@@ -116,7 +116,7 @@ extern volatile stepper_state_t g_stepper_states[NUMBER_OF_MOTORS];
 
 #define FW_VERSION_MAJOR 2
 #define FW_VERSION_MINOR 0
-#define FW_VERSION_BUGFIX 1
+#define FW_VERSION_BUGFIX 2
 
 #define NCO_FREQUENCY 100000
 

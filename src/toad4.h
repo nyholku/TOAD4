@@ -69,6 +69,20 @@ struct {
 	uint8_t ready_bits;
 } g_ready_flags;
 
+extern union {
+struct {
+	unsigned not_empty_0 :1; // bit 0
+	unsigned not_empty_1 :1;
+	unsigned not_empty_2 :1;
+	unsigned not_empty_3 :1;
+	unsigned not_empty_4 :1;
+	unsigned not_empty_5 :1;
+	unsigned not_empty_6 :1;
+	unsigned not_empty_7 :1;
+};
+	uint8_t not_empty_bits;
+} g_not_empty_flags;
+
 // note all this is referenced from assembler so do-not rearrange at willy-nilly
 typedef volatile struct {
 	uint16_t nco; // offset 0
@@ -82,7 +96,7 @@ typedef volatile struct {
 		unsigned update_pos :1; // bit 0
 		unsigned next_dir :1;
 		unsigned last_dir :1;
-		unsigned empty :1;
+		unsigned obs_empty :1;
 		unsigned bit_4 :1;
 		unsigned bit_5 :1;
 		unsigned bit_6 :1;
@@ -116,7 +130,7 @@ extern volatile stepper_state_t g_stepper_states[NUMBER_OF_MOTORS];
 
 #define FW_VERSION_MAJOR 2
 #define FW_VERSION_MINOR 0
-#define FW_VERSION_BUGFIX 2
+#define FW_VERSION_BUGFIX 3
 
 #define NCO_FREQUENCY 100000
 

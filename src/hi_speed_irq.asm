@@ -16,6 +16,7 @@
 	global	_g_busy_bits
 	global	_g_ready_flags
 	global	_g_ready_bits
+	global	_g_not_empty_flags
 ;
 	global	_high_priority_interrupt_service
 	global	_g_pwm_out
@@ -69,6 +70,8 @@ _g_busy_flags		res 1
 _g_busy_bits		res 1
 _g_ready_flags		res 1
 _g_ready_bits		res 1
+_g_not_empty_flags  res 1
+_g_comb_flags  		res 1
 _g_pwm_out			res	1
 ;
 ;
@@ -153,6 +156,7 @@ STEP_GENERATOR_MACRO macro motor_flag_bit,motor,step_out_port,step_out_bit,dir_o
 	local no_steps_left
 	local next_dir_reverse
 	local no_next
+	local no_int
 ;
 ;	MOTOR.nco += MOTOR.speed;
 ;
@@ -186,8 +190,7 @@ no_steps_left:
 ;
 	BCF		(_g_busy_flags), motor_flag_bit, B
 ;
-	MOVF	_g_busy_bits, W, B
-	IORWF	_g_ready_bits, W, B
+	MOVF	_g_comb_flags, W, B
 	ANDWF	(motor + ready_mask), W, B
 	BNZ		not_busy
 ;
@@ -196,8 +199,11 @@ no_steps_left:
 	BCF	_LATBbits,4
 	ENDIF
 ;
-	BSF 	_PIR1, 2   	; // trig the queue processing with sw-interrupt
-	BSF		(motor + flags), update_pos_bit, B
+	BTFSC	(_g_ready_bits), motor_flag_bit, B ; skip is clear == ready == 0
+	BRA		all_done
+;
+;	BSF 	_PIR1, 2   	; // trig the queue processing with sw-interrupt
+;	BSF		(motor + flags), update_pos_bit, B
 	BSF		(_g_busy_flags), motor_flag_bit, B
 	BSF		(_g_ready_flags), motor_flag_bit, B
 ;
@@ -251,8 +257,8 @@ _high_priority_interrupt_service:
 ;;;	BSF	_LATBbits, 4 ;// FIXME: THIS LINE JUST FOR TESTING
 ;
 ; FIXME, basically following is unnecessary also as this is the only hi priority interrupt....
-	BTFSS	_PIR1bits, 1
-	BRA	_00146_DS_
+;	BTFSS	_PIR1bits, 1
+;	BRA	_00146_DS_
 ;
 ;
 	BCF	_PIR1bits, 1
@@ -262,7 +268,11 @@ _high_priority_interrupt_service:
 	MOVLW	0x0f
 	IORWF	_LATD, F
 ;
-	MOVFF	_g_busy_flags , _g_busy_bits
+	MOVF    _g_ready_flags, W, B
+	IORWF	_g_busy_flags, W, B
+	ANDWF   _g_not_empty_flags, W, B
+	MOVWF   _g_comb_flags, B
+;
 	MOVFF	_g_ready_flags , _g_ready_bits
 ;
 	STEP_GENERATOR_MACRO 0, MOTOR_X, STEP_X_PORT, STEP_X_BIT, DIR_X_PORT, DIR_X_BIT, 0

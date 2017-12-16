@@ -85,23 +85,23 @@ typedef struct {
 	int32_t position;
 	uint8_t queue_state;
 	unsigned home :1; // bit 0
-	unsigned reserved_1 :1;
-	unsigned reserved_2 :1;
-	unsigned reserved_3 :1;
-	unsigned reserved_4 :1;
-	unsigned reserved_5 :1;
-	unsigned reserved_6 :1;
-	unsigned reserved_7 :1; // bit 7
-	uint8_t sync_counter;
+	unsigned obs_reserved_1 :1;
+	unsigned obs_reserved_2 :1;
+	unsigned obs_reserved_3 :1;
+	unsigned obs_reserved_4 :1;
+	unsigned obs_reserved_5 :1;
+	unsigned obs_reserved_6 :1;
+	unsigned obs_reserved_7 :1; // bit 7
+	uint8_t obs_sync_counter;
 
-	unsigned ready :1; // bit 0
-	unsigned ready2 :1;
-	unsigned not_busy :1;
-	unsigned not_busy2 :1;
-	unsigned not_empty :1;
-	unsigned reserved_8 :1;
-	unsigned in_sync :1;
-	unsigned reserved_9 :1; // bit 7
+	unsigned obs_ready :1; // bit 0
+	unsigned obs_ready2 :1;
+	unsigned obs_not_busy :1;
+	unsigned obs_not_busy2 :1;
+	unsigned obs_not_empty :1;
+	unsigned obs_reserved_8 :1;
+	unsigned obs_in_sync :1;
+	unsigned obs_reserved_9 :1; // bit 7
 } stepper_status_t; // dev => host status
 
 typedef struct {
@@ -173,35 +173,42 @@ static uint8_t g_ADCresult;
 			STEPPER(i).position += STEPPER(i).last_steps; \
 		else \
 			STEPPER(i).position -= STEPPER(i).last_steps; \
-		BITCPY(STEPPER(i).last_dir,STEPPER(i).next_dir); \
-		STEPPER(i).last_steps = STEPPER(i).next_steps; \
+		STEPPER(i).last_steps = 0; \
 		}\
 	}while(0)
 
+
+#define FEED_MOREX(i) do { \
+		}while(0)
 
 
 #define FEED_MORE(i) do { \
 	if (g_ready_flags.ready_##i)  { \
 		if (QUEUE_EMPTY(i)) { \
-			if (!STEPPER(i).empty) { \
-				STEPPER(i).empty = 1; \
-				STEPPER(i).update_pos = 1; \
-				STEPPER(i).next_steps = 0; \
+			if (g_not_empty_flags.not_empty_##i) { \
+				/* STEPPER(i).update_pos = 1;*/ \
+				/* STEPPER(i).next_steps = 0;*/ \
 				/* trig sw interrupt so that update gets processed */ \
-				PIR1bits.CCP1IF = 1;  \
+				g_not_empty_flags.not_empty_##i = 0;  \
+				/* PIR1bits.CCP1IF = 1;  */  \
 				} \
 			} \
 		else{ \
 			int16_t distance = QUEUE_FRONT(i)->move_distance;  \
 			if (distance < 0) { \
 				STEPPER(i).next_dir = 0; \
+				STEPPER(i).last_dir = 0; \
 				distance = -distance; \
 				} \
-			else \
+			else { \
 				STEPPER(i).next_dir = 1; \
+				STEPPER(i).last_dir = 1; \
+			} \
 			if (distance > 255) \
 				distance = 255; \
 			STEPPER(i).next_steps = distance; \
+			STEPPER(i).last_steps = distance; \
+			STEPPER(i).update_pos = 1; \
 			STEPPER(i).next_speed = QUEUE_FRONT(i)->move_speed; \
 			if (STEPPER(i).next_dir) \
 				QUEUE_FRONT(i)->move_distance -= distance; \
@@ -210,7 +217,7 @@ static uint8_t g_ADCresult;
 			if (QUEUE_FRONT(i)->move_distance == 0) \
 				QUEUE_POP(i); \
 			g_ready_flags.ready_##i = 0; \
-			STEPPER(i).empty = 0; \
+			g_not_empty_flags.not_empty_##i = 1; \
 			} \
 		} \
 	}while(0)
@@ -370,6 +377,7 @@ int32_t get_position(uint8_t i) {
 	uint8_t dlt;
 	int32_t pos;
 	uint8_t dir;
+	uint8_t upd;
 	do { // loop until we have a reading not disturbed by the lo priority interrupt
 		stp = g_low_pri_isr_guard;
 		dlt = g_stepper_states[i].last_steps - g_stepper_states[i].steps;
@@ -379,10 +387,10 @@ int32_t get_position(uint8_t i) {
 		// busy => high speed interrupt has not yet transferred next_steps to steps,
 		// meaning last_steps is wrong?
 	} while (stp != g_low_pri_isr_guard);
-	if (dir)
-		pos += dlt;
-	else
-		pos -= dlt;
+//	if (dir)
+//		pos += dlt;
+//	else
+//		pos -= dlt;
 	return pos;
 }
 #pragma restore
@@ -414,8 +422,8 @@ void low_priority_interrupt_service() __interrupt(2) {
 
 
 		//FOR_EACH_MOTOR_DO(UPDATE_SYNC);
-		FOR_EACH_MOTOR_DO(UPDATE_POS);
 		FOR_EACH_MOTOR_DO(FEED_MORE);
+		FOR_EACH_MOTOR_DO(UPDATE_POS);
 	} // End of 'software' interrupt processing
 
 	if (PIR2bits.TMR3IF) {
@@ -495,6 +503,8 @@ void main(void) {
 
 	g_ready_flags.ready_bits = 0xFF;
 	g_busy_flags.busy_bits = 0x00;
+	g_not_empty_flags.not_empty_bits = 0xFF;
+
 	FOR_EACH_MOTOR_DO(INIT_MOTOR);
 	FOR_EACH_MOTOR_DO(UPDATE_GROUP_MASK_1);
 	FOR_EACH_MOTOR_DO(UPDATE_GROUP_MASK_2);
@@ -642,12 +652,43 @@ void main(void) {
 			if (g_special_request==0x01) {
 				memcpypgm2ram(&hid_tx_buffer.uint8[0],get_toad4_config(),63);
 			} else {
+				uint8_t updf=0;
 
 				// make structure g_toad4_status so that we can use a single copy
 				memcpyram2ram(&hid_tx_buffer.uint8[0], &g_toad4_status.steppers[0],8);
 				memcpyram2ram(&hid_tx_buffer.uint8[8], &g_toad4_status.steppers[1],8);
 				memcpyram2ram(&hid_tx_buffer.uint8[16], &g_toad4_status.steppers[2],8);
 				memcpyram2ram(&hid_tx_buffer.uint8[24], &g_toad4_status.steppers[3],8);
+
+				hid_tx_buffer.uint8[32] = g_stepper_states[0].steps;
+				hid_tx_buffer.uint8[33] = g_stepper_states[0].last_steps;
+				hid_tx_buffer.uint8[34] = g_stepper_states[0].next_steps;
+				hid_tx_buffer.uint8[35] = g_stepper_states[0].update_pos;
+
+				hid_tx_buffer.uint8[36] = g_stepper_states[1].steps;
+				hid_tx_buffer.uint8[37] = g_stepper_states[1].last_steps;
+				hid_tx_buffer.uint8[38] = g_stepper_states[1].next_steps;
+				hid_tx_buffer.uint8[39] = g_stepper_states[1].update_pos;
+
+				hid_tx_buffer.uint8[40] = g_stepper_states[2].steps;
+				hid_tx_buffer.uint8[41] = g_stepper_states[2].last_steps;
+				hid_tx_buffer.uint8[42] = g_stepper_states[2].next_steps;
+				hid_tx_buffer.uint8[43] = g_stepper_states[2].update_pos;
+
+				hid_tx_buffer.uint8[44] = g_stepper_states[3].steps;
+				hid_tx_buffer.uint8[45] = g_stepper_states[3].last_steps;
+				hid_tx_buffer.uint8[46] = g_stepper_states[3].next_steps;
+				hid_tx_buffer.uint8[47] = g_stepper_states[3].update_pos;
+
+				updf = 0;
+				if (g_stepper_states[0].update_pos)
+					updf |= 0x01;
+				if (g_stepper_states[1].update_pos)
+					updf |= 0x02;
+				if (g_stepper_states[2].update_pos)
+					updf |= 0x04;
+				if (g_stepper_states[3].update_pos)
+					updf |= 0x08;
 
 				// 6*8 = 48
 				//FOR_EACH_MOTOR_DO(READ_HOME);
@@ -656,14 +697,14 @@ void main(void) {
 				hid_tx_buffer.uint8[50] = PORTA;//0; // digital inputs 0-7
 				hid_tx_buffer.uint8[51] = 0; // digital inputs 8-15
 				hid_tx_buffer.uint8[52] = g_ADCresult; // analog input 0
-				hid_tx_buffer.uint8[53] = g_stepper_states[0].steps;
-				hid_tx_buffer.uint8[54] = g_stepper_states[0].last_steps;
-				hid_tx_buffer.uint8[55] = g_stepper_states[0].next_steps;
-				hid_tx_buffer.uint8[56] = g_stepper_states[0].empty;
-				hid_tx_buffer.uint8[57] = g_stepper_states[0].update_pos;
+				hid_tx_buffer.uint8[53] = 0;
+				hid_tx_buffer.uint8[54] = 0;
+				hid_tx_buffer.uint8[55] = 0;
+				hid_tx_buffer.uint8[56] = 0;
+				hid_tx_buffer.uint8[57] = 0;
 				hid_tx_buffer.uint8[58] = 0;
-				hid_tx_buffer.uint8[59] = 0;
-				hid_tx_buffer.uint8[60] = 0;
+				hid_tx_buffer.uint8[59] = updf;
+				hid_tx_buffer.uint8[60] = g_not_empty_flags.not_empty_bits;
 				hid_tx_buffer.uint8[61] = g_busy_flags.busy_bits;
 				hid_tx_buffer.uint8[62] = g_ready_flags.ready_bits;
 			}
@@ -678,3 +719,4 @@ void main(void) {
 		blink_led();
 	}
 }
+

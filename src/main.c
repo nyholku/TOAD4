@@ -121,6 +121,8 @@ static uint16_t g_blink_counter = 0;
 
 static uint8_t g_special_request = 0;
 
+static uint8_t g_RCON;
+
 static union {
 	uint8_t uint8;
 	struct {
@@ -499,6 +501,9 @@ void check_probe() {
 uint8_t g_debug_cnt=0;
 
 void main(void) {
+	g_RCON = RCON;
+	RCON |= 0x1F;
+
 	initIO();
 
 	g_ready_flags.ready_bits = 0xFF;
@@ -600,6 +605,9 @@ void main(void) {
 			g_message_id = hid_rx_buffer.uint8[63];
 			toggle_led();
 
+			if (hid_rx_buffer.uint8[0] == 0x73) { // watchdog test
+				while (1);
+			} else
 			if (hid_rx_buffer.uint8[0] == 0xFE) { // special message
 				check_for_firmware_update(); // may not ever return
 				g_special_request = hid_rx_buffer.uint8[1];
@@ -651,6 +659,7 @@ void main(void) {
 
 			if (g_special_request==0x01) {
 				memcpypgm2ram(&hid_tx_buffer.uint8[0],get_toad4_config(),63);
+				hid_tx_buffer.uint8[62] = g_RCON;
 			} else {
 				uint8_t updf=0;
 

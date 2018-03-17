@@ -15,11 +15,16 @@
 	global	_g_busy_flags
 	global	_g_busy_bits
 	global	_g_ready_flags
-	global	_g_ready_bits
+;	global	_g_ready_bits
 	global	_g_not_empty_flags
+	global	_g_pop_flags
+	global	_g_debug_count
 ;
 	global	_high_priority_interrupt_service
 	global	_g_pwm_out
+	global	_g_hipri_int_flags
+	global	_g_lopri_int_flags
+
 ;
 ;--------------------------------------------------------
 ; extern variables in this module
@@ -65,14 +70,17 @@ PRODH	equ	0xff4
 ;
 #define motor_size 20
 
-_g_stepper_states	res 4*motor_size
-_g_busy_flags		res 1
-_g_busy_bits		res 1
-_g_ready_flags		res 1
-_g_ready_bits		res 1
-_g_not_empty_flags  res 1
-_g_comb_flags  		res 1
-_g_pwm_out			res	1
+_g_stepper_states		res 4*motor_size
+_g_busy_flags			res 1
+_g_busy_bits			res 1
+_g_ready_flags			res 1
+;_g_ready_bits			res 1
+_g_not_empty_flags  	res 1
+_g_hipri_int_flags  	res 1
+_g_lopri_int_flags  	res 1
+_g_pop_flags  			res 1
+_g_pwm_out				res	1
+_g_debug_count			res	1
 ;
 ;
 ;--------------------------------------------------------
@@ -105,7 +113,7 @@ _g_pwm_out			res	1
 #define not_busy_bit 6
 #define not_busy2_bit 7
 
-#define ready_mask 10
+#define group_mask 10
 ;#define busy_mask 11
 
 
@@ -190,8 +198,8 @@ no_steps_left:
 ;
 	BCF		(_g_busy_flags), motor_flag_bit, B
 ;
-	MOVF	_g_comb_flags, W, B
-	ANDWF	(motor + ready_mask), W, B
+	MOVF	_g_hipri_int_flags, W, B
+	ANDWF	(motor + group_mask), W, B
 	BNZ		not_busy
 ;
 ;
@@ -199,8 +207,8 @@ no_steps_left:
 	BCF	_LATBbits,4
 	ENDIF
 ;
-	BTFSC	(_g_ready_bits), motor_flag_bit, B ; skip is clear == ready == 0
-	BRA		all_done
+;	BTFSC	(_g_ready_flags), motor_flag_bit, B ; skip if clear == ready == 0
+;	BRA		all_done
 ;
 ;	BSF 	_PIR1, 2   	; // trig the queue processing with sw-interrupt
 ;	BSF		(motor + flags), update_pos_bit, B
@@ -270,10 +278,8 @@ _high_priority_interrupt_service:
 ;
 	MOVF    _g_ready_flags, W, B
 	IORWF	_g_busy_flags, W, B
-	ANDWF   _g_not_empty_flags, W, B
-	MOVWF   _g_comb_flags, B
-;
-	MOVFF	_g_ready_flags , _g_ready_bits
+	MOVWF   _g_hipri_int_flags, B
+;	MOVFF	_g_ready_flags , _g_ready_bits
 ;
 	STEP_GENERATOR_MACRO 0, MOTOR_X, STEP_X_PORT, STEP_X_BIT, DIR_X_PORT, DIR_X_BIT, 0
 ;

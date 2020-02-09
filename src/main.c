@@ -147,9 +147,9 @@ static uint8_t g_sync_counter[NUMBER_OF_MOTORS] = { 0 };
 
 static uint8_t g_message_id = 0;
 
-extern volatile uint8_t g_pwm_out; // declared in hi_speed_irq.asm
+//extern volatile uint8_t g_pwm_out; // declared in hi_speed_irq.asm
 
-static uint8_t g_ADCresult;
+static volatile uint8_t g_ADCresult;
 
 extern uint8_t g_hipri_int_flags;
 
@@ -162,7 +162,8 @@ extern uint8_t g_lopri_int_flags;
 #define INIT_MOTOR(i) do { \
 	g_toad4_status.steppers[i].position = 0; \
 	g_stepper_states[i].next_dir = 0; \
-	g_stepper_states[i].last_dir = 0; \
+	g_stepper_states[i].next_forward = 0; \
+	g_stepper_states[i].next_reverse = 1; \
 	g_stepper_states[i].next_steps = 0; \
 	g_stepper_states[i].last_steps = 0; \
 	g_stepper_states[i].steps = 0; \
@@ -177,7 +178,8 @@ extern uint8_t g_lopri_int_flags;
 #define RESET_MOTOR(i) do { \
 	g_toad4_status.steppers[i].position = 0; \
 	g_stepper_states[i].next_dir = 0; \
-	g_stepper_states[i].last_dir = 0; \
+	g_stepper_states[i].next_forward = 0; \
+	g_stepper_states[i].next_reverse = 1; \
 	g_stepper_states[i].next_steps = 0; \
 	g_stepper_states[i].last_steps = 0; \
 	g_stepper_states[i].steps = 0; \
@@ -191,7 +193,7 @@ extern uint8_t g_lopri_int_flags;
 #define UPDATE_POS(i) do { \
 	if (STEPPER(i).update_pos){ \
 		STEPPER(i).update_pos = 0; \
-		if (STEPPER(i).last_dir) \
+		if (STEPPER(i).next_dir) \
 			STEPPER(i).position += STEPPER(i).last_steps; \
 		else \
 			STEPPER(i).position -= STEPPER(i).last_steps; \
@@ -214,13 +216,19 @@ extern uint8_t g_debug_count;
 		if ((g_lopri_int_flags & STEPPER(i).group_mask) == 0) { \
 			int16_t distance = QUEUE_FRONT(i)->move_distance;  \
 			if (distance < 0) { \
-				STEPPER(i).next_dir = 0; \
-				STEPPER(i).last_dir = 0; \
+				if (STEPPER(i).next_dir) { \
+					STEPPER(i).next_dir = 0; \
+					STEPPER(i).next_forward = 0; \
+					STEPPER(i).next_reverse = 1; \
+					} \
 				distance = -distance; \
 				} \
-			else { \
-				STEPPER(i).next_dir = 1; \
-				STEPPER(i).last_dir = 1; \
+			else if (distance > 0) { \
+				if (!STEPPER(i).next_dir) { \
+					STEPPER(i).next_dir = 1; \
+					STEPPER(i).next_forward = 1; \
+					STEPPER(i).next_reverse = 0; \
+				} \
 			} \
 			if (distance > 255) \
 				distance = 255; \
@@ -323,28 +331,16 @@ extern uint8_t g_debug_count;
 		COOLANT = 0; \
 	} while (0)
 
-#define UPDATE_PWM_OUTPUT_0_480(x) do {\
-		uint16_t v = (x); \
-		uint16_t r = ((v << 4) - (v)) >> 5; \
-		CCPR2L = r>>2; \
-		CCP2CON = (CCP2CON & 0xCF) | ((r << 4) & 0x30); \
+
+#define UPDATE_PWM(x) do {\
+	uint16_t x16 = 0; \
+	if ((x) >= 18) \
+		x16=(x)*4-72;\
+	CCPR2L = x16>>2; \
+	CCP2CON = (CCP2CON & 0xCF) | ((x16 << 4) & 0x30); \
 	} while(0)
 
-#define UPDATE_PWM_OUTPUT(x) do {\
-		uint16_t v = (x); \
-		uint16_t r; \
-		v = v << 3; \
-		r = v; \
-		v = v >> 1; \
-		r += v; \
-		v = v >> 1;\
-		r += v;\
-		v = v >> 1;\
-		r += v; \
-		r = r >> 5; \
-		CCPR2L = r>>2; \
-		CCP2CON = (CCP2CON & 0xCF) | ((r << 4) & 0x30); \
-	} while(0)
+
 
 // To change number of motors supported you need to
 // 1) change this macro
@@ -394,23 +390,11 @@ extern uint8_t g_debug_count;
 
 int32_t get_position(uint8_t i) {
 	uint8_t stp;
-	uint8_t dlt;
 	int32_t pos;
-	uint8_t dir;
-	uint8_t upd;
 	do { // loop until we have a reading not disturbed by the lo priority interrupt
 		stp = g_low_pri_isr_guard;
-		dlt = g_stepper_states[i].last_steps - g_stepper_states[i].steps;
 		pos = g_stepper_states[i].position;
-		dir = g_stepper_states[i].last_dir;
-
-		// busy => high speed interrupt has not yet transferred next_steps to steps,
-		// meaning last_steps is wrong?
 	} while (stp != g_low_pri_isr_guard);
-//	if (dir)
-//		pos += dlt;
-//	else
-//		pos -= dlt;
 	return pos;
 }
 #pragma restore
@@ -434,9 +418,9 @@ volatile uint8uint16_t g_ccp2_next;
 volatile uint8uint16_t g_tmr3;
 
 void low_priority_interrupt_service() __interrupt(2) {
-	if (PIR1bits.CCP1IF) {
+	if (PIR2bits.CCP2IF) {
 		g_low_pri_isr_guard++;
-		PIR1bits.CCP1IF = 0;
+		PIR2bits.CCP2IF = 0;
 
 		FOR_EACH_MOTOR_DO(UPDATE_NOT_EMPTY);
 		g_lopri_int_flags = ~(g_ready_flags.ready_bits
@@ -474,7 +458,9 @@ void enterBootloader() {
 
 void blink_led() {
 	static uint8_t old = 0;
-	uint8_t new = TMR0H;
+	uint8_t new;
+ 	new = TMR0L; // need to read TMR0L to get TMR0H updated
+	new = TMR0H;
 	if (new != old) {
 		old = new;
 		g_blink_counter++;
@@ -514,13 +500,12 @@ void check_probe() {
 		g_probe.probe_triggered = 1;
 }
 
-uint8_t g_debug_cnt = 0;
-
-void diibadaaba() {
-	g_hipri_int_flags = 0x55;
-}
-
 void main(void) {
+	// Capture the reset cause flags and clear them
+	// FIXME, should we actually clear them not at startup (here)
+	// but AFTER connecting to the host so that cycling MACH
+	// in EazyCNC would clear the watcdog error/message?
+
 	g_RCON = RCON;
 	RCON |= 0x1F;
 
@@ -535,11 +520,9 @@ void main(void) {
 	FOR_EACH_MOTOR_DO(UPDATE_GROUP_MASK_2);
 	FOR_EACH_MOTOR_DO(UPDATE_GROUP_MASK_3);
 
+	// FIXME why do we configure RC6 which is USART TX as output, it is not used.
+	// Was it for debugging?
 	TRISCbits.TRISC6 = 0;
-
-// Timer 0 interrupt rate = ((48 000 000 MHz / 4) / 4) / 256 = 11 718.7 Hz
-// rxtimeout = 255/11718.75 = 21.7 msec
-// Note Timer 2 would allow faster rates if the interrupt processing can be optimized
 
 	T0CONbits.T0CS = 0; // Internal instruction clock as source for timer 0
 	T0CONbits.PSA = 0;  // Enable prescaler for Timer 0
@@ -552,39 +535,53 @@ void main(void) {
 	T0CONbits.TMR0ON = 1; // XXX
 	T0CONbits.T0SE = 1; // high to low (no effect when timer clock coming from instruction clock...)
 
-	usbcdc_init();
-
 	INTCON = 0; // Clear interrupt flag bits.
 
 	TMR0L = 0;
 	TMR0H = 0;
 
-	T2CONbits.T2CKPS0 = 0;
-	T2CONbits.T2CKPS1 = 0; // Timer 2 prescaler 1 => 48 MHz / 4  /  4 = 3 Mhz
-//  PR2 = 69 = 12 Mhz / 69 = 174 kHz abs max interrupt frequency
-	PR2 = 120; // 3 Mhz / 30 = 100 kHz
+	T1CONbits.T1CKPS0 = 0;
+	T1CONbits.T1CKPS1 = 0;
+	T1CONbits.TMR1CS = 0;
+	CCPTMRSbits.C1TSEL = 0; // CCP1 uses TMR1 (compares agains it)
+	CCPR1H = 0;
+	CCPR1L = 120; // 12 MHz/120 = 100 kHz
+	CCP1CON = 0x0B; // special event trigger, set CCP1IF on match, reset timer
+	T1CONbits.TMR1ON = 1;
 
-	T2CONbits.TMR2ON = 1;
+	// NOTE! CCP2IF is used as software interrupt flag,
+	// in the TMR2 PWM  mode/configuration it is not set or cleared by the hardware
+	PIR2bits.CCP2IF = 1;
 
-	PIR1bits.CCP1IF = 1;
+	// Ensure no interrupts are enabled at this point
+	PIE1 = 0;
+	PIE2 = 0;
+	PIE3 = 0;
 
-	IPR1 = 0; // All interrupts low priority
+	// Ensure that all interrupts are low priority
+	IPR1 = 0;
 	IPR2 = 0;
 	IPR3 = 0;
+
+	// FIXME there are other than interrupt priority bits in these regs so
+	// would be cleaner to set (clear) each one separately or relay on reset values
 	INTCON = 0;
 	INTCON2 = 0;
 	INTCON3 = 0;
-	IPR1bits.TMR2IP = 1; // except TIMER2  high priority
+
+	// ... except make  CCP1 interrupt  high priority
+	IPR1bits.CCP1IP = 1;// was TMR2IP !!
 	RCONbits.IPEN = 1; // enable priorities
 
-	PIE1 = 0;
-	PIE2 = 0;
 
-	// TIMER 1 configuration
-	CCP1CON = 0x00; // XXX disable CCP1M
-	CCP2CON = 0x0A; // XXX CCP2M = 1010 = interupt on match
+	// TIMER 2 configuration
+	T2CONbits.T2CKPS0 = 1;
+	T2CONbits.T2CKPS1 = 1;
+	PR2 = 255;
+	CCPR2L =25;
+	CCP2CONbits.CCP2M = 0x0C; // PWM mode
+	T2CONbits.TMR2ON = 1;
 
-	// T3CONbits.TMR3ON = 1; // XXX always on
 	T3GCONbits.TMR3GE = 0; // XXX always on
 
 	T3CONbits.T3CKPS0 = 1;
@@ -599,28 +596,46 @@ void main(void) {
 
 	CCPTMRSbits.C2TSEL = 1;
 
-	PIE2bits.TMR3IE = 1;
-	PIE2bits.CCP2IE = 1;
+	// Make the PWM pin PB3 output
 	TRISBbits.TRISB3 = 0;
 
-	PIE1bits.CCP1IE = 1; // Enable CCP1 interrupt
-	PIE3bits.USBIE = 1; // Enable USB interrupts
-	PIE1bits.TMR2IE = 1; // Enable Timer 2 interrupts
-	//INTCONbits.TMR0IE = 0; // Enable Timer 0 interrupts
+	// Initialize the USB stack
+	usbcdc_init();
 
+	// Turn the run LED on
 	LED_PIN = 0;
+
+	// This seems to be as good a place as any to document interrupt usage
+	// TMR2 interrupt = high priority, written in asm, running the NCOs (Numerically Controlled Oscillators)
+	// CCP1 interrupt =  used to feed the high priority NCO interrupt
+	// USB interrupt = low priority, runs the USB stack, what else
+	// TMR3 interrupt = no funtion
+	// CCP2 interrupt =  no function
+
+	// Enable interrupts
+	//PIE1bits.TMR2IE = 0; // ! was
+	PIE1bits.CCP1IE = 1;
+	PIE3bits.USBIE = 1;
+	//PIE2bits.TMR3IE = 1;
+	PIE2bits.CCP2IE = 1;
 
 	INTCONbits.PEIE = 1; // enable peripheral interrupts
 	INTCONbits.GIE = 1; // global interrupt enable
 
-	WDTCONbits.SWDTEN = 1; // watchdog
+	// Enable the watchdog
+	WDTCONbits.SWDTEN = 1;
+
 
 	while (1) {
 		__asm__ (" CLRWDT  ");
+        
+        // trig sw interrupt so that the queues get updated
+        PIR2bits.CCP2IF = 1;
 
 		if (!(ep2_o.STAT & UOWN)) { // new data from host, so process it
 			g_message_id = hid_rx_buffer.uint8[63];
 			toggle_led();
+
 
 			if (hid_rx_buffer.uint8[0] == 0x73) { // watchdog test
 				while (1)
@@ -639,7 +654,9 @@ void main(void) {
 
 				UPDATE_OUTPUTS(hid_rx_buffer.uint8[50]);
 
-				g_pwm_out = hid_rx_buffer.uint8[52];
+				//g_pwm_out = hid_rx_buffer.uint8[52];
+				UPDATE_PWM(hid_rx_buffer.uint8[52]);
+
 
 				BITCPY(g_probe.probe_armed_trig_on_1,
 						0x01 & hid_rx_buffer.uint8[49]);
@@ -649,8 +666,6 @@ void main(void) {
 						&& !g_probe.probe_armed_trig_on_0)
 					g_probe.probe_triggered = 0;
 
-				// trig sw interrupt so that the queues get updated
-				PIR1bits.CCP1IF = 1;
 			}
 			// turn the buffer over to SIE so we can get more data
 			ep2_o.CNT = 64;
@@ -670,7 +685,7 @@ void main(void) {
 		if (ADCON0bits.GO_NOT_DONE == 0) {
 			g_ADCresult = ADRESH;
 			ADCON0bits.GO_NOT_DONE = 1;
-		}
+			}
 
 		if (!(ep2_i.STAT & UOWN)) {	// we own the USB buffer, so update data going to the host
 			g_blink_speed = 1;
@@ -679,19 +694,20 @@ void main(void) {
 			if (g_special_request == 0x01) {
 				memcpypgm2ram(&hid_tx_buffer.uint8[0], get_toad4_config(), 63);
 				hid_tx_buffer.uint8[62] = g_RCON;
+				g_RCON = RCON;
 			} else {
 				uint8_t updf = 0;
 
-				// make structure g_toad4_status so that we can use a single copy
-				memcpyram2ram(&hid_tx_buffer.uint8[0],
-						&g_toad4_status.steppers[0], 8);
-				memcpyram2ram(&hid_tx_buffer.uint8[8],
-						&g_toad4_status.steppers[1], 8);
-				memcpyram2ram(&hid_tx_buffer.uint8[16],
-						&g_toad4_status.steppers[2], 8);
-				memcpyram2ram(&hid_tx_buffer.uint8[24],
-						&g_toad4_status.steppers[3], 8);
+				// FIXME make structure g_toad4_status so that we can use a single copy
+				// or see if it would be better to create a memcpyram2ram that move 8 bytes
+				// with direct move commands and no looping
+				memcpyram2ram(&hid_tx_buffer.uint8[0], &g_toad4_status.steppers[0], 8);
+				memcpyram2ram(&hid_tx_buffer.uint8[8], &g_toad4_status.steppers[1], 8);
+				memcpyram2ram(&hid_tx_buffer.uint8[16], &g_toad4_status.steppers[2], 8);
+				memcpyram2ram(&hid_tx_buffer.uint8[24],	&g_toad4_status.steppers[3], 8);
 
+				// FIXME, see if above and below could be combined to a single memcpyram2ram by
+				// rearranging the structures
 				hid_tx_buffer.uint8[32] = g_stepper_states[0].steps;
 				hid_tx_buffer.uint8[33] = g_stepper_states[0].last_steps;
 				hid_tx_buffer.uint8[34] = g_stepper_states[0].next_steps;
@@ -712,20 +728,6 @@ void main(void) {
 				hid_tx_buffer.uint8[46] = g_stepper_states[3].next_steps;
 				hid_tx_buffer.uint8[47] = g_stepper_states[3].update_pos;
 
-				/*
-				 updf = 0;
-				 if (g_stepper_states[0].update_pos)
-				 updf |= 0x01;
-				 if (g_stepper_states[1].update_pos)
-				 updf |= 0x02;
-				 if (g_stepper_states[2].update_pos)
-				 updf |= 0x04;
-				 if (g_stepper_states[3].update_pos)
-				 updf |= 0x08;
-				 */
-
-				// 6*8 = 48
-				//FOR_EACH_MOTOR_DO(READ_HOME);
 				hid_tx_buffer.uint8[49] = g_probe.uint8; // & 0x03; //
 				hid_tx_buffer.uint8[50] = PORTA; //0; // digital inputs 0-7
 				hid_tx_buffer.uint8[51] = 0; // digital inputs 8-15
@@ -752,4 +754,3 @@ void main(void) {
 		blink_led();
 	}
 }
-

@@ -109,10 +109,10 @@ typedef volatile struct {
 	struct { //offset 9
 		unsigned update_pos :1; // bit 0
 		unsigned next_dir :1;
-		unsigned last_dir :1;
+		unsigned bit_3 :1;
 		unsigned obs_empty :1;
-		unsigned bit_4 :1;
-		unsigned bit_5 :1;
+		unsigned next_forward :1;
+		unsigned next_reverse :1;
 		unsigned bit_6 :1;
 		unsigned bit_7 :1;
 	};
@@ -144,7 +144,7 @@ extern volatile stepper_state_t g_stepper_states[NUMBER_OF_MOTORS];
 
 #define FW_VERSION_MAJOR 2
 #define FW_VERSION_MINOR 0
-#define FW_VERSION_BUGFIX 5
+#define FW_VERSION_BUGFIX 8
 
 #define NCO_FREQUENCY 100000
 
@@ -153,6 +153,22 @@ extern volatile stepper_state_t g_stepper_states[NUMBER_OF_MOTORS];
 void initIO();
 
 #if TOAD_HW_VERSION==HW4
+
+typedef struct {
+		unsigned bit_0 :1; // bit 0
+		unsigned bit_1 :1;
+		unsigned bit_2 :1;
+		unsigned bit_3 :1;
+		unsigned bit_4 :1;
+		unsigned bit_5 :1;
+		unsigned bit_6 :1;
+		unsigned bit_7 :1;
+	} PORT_bits;
+
+
+extern volatile PORT_bits g_LATB; // defined in hi_speed_irq.asm where it is copied to the actual hardware port
+extern volatile PORT_bits g_LATC; // defined in hi_speed_irq.asm where it is copied to the actual hardware port
+extern volatile PORT_bits g_LATD_enables; //  defined in hi_speed_irq.asm where it is ORed with step pulses and output to LATD
 
 #define STEP_X 				LATDbits.LATD0
 #define STEP_X_TRIS 		TRISDbits.TRISD0
@@ -166,28 +182,28 @@ void initIO();
 #define STEP_A 				LATDbits.LATD3
 #define STEP_A_TRIS 		TRISDbits.TRISD3
 
-#define DIR_X 				LATCbits.LATC0
+#define DIR_X 				g_LATC.bit_0
 #define DIR_X_TRIS 			TRISCbits.TRISC0
 
-#define DIR_Y 				LATCbits.LATC1
+#define DIR_Y 				g_LATC.bit_1
 #define DIR_Y_TRIS 			TRISCbits.TRISC1
 
-#define DIR_Z 				LATCbits.LATC2
+#define DIR_Z 				g_LATC.bit_2
 #define DIR_Z_TRIS 			TRISCbits.TRISC2
 
-#define DIR_A 				LATBbits.LATB6
+#define DIR_A 				g_LATB.bit_6
 #define DIR_A_TRIS 			TRISBbits.TRISB6
 
-#define ENABLE_X 			LATDbits.LATD4
+#define ENABLE_X 			g_LATD_enables.bit_4
 #define ENABLE_X_TRIS 		TRISDbits.TRISD4
 
-#define ENABLE_Y 			LATDbits.LATD5
+#define ENABLE_Y 			g_LATD_enables.bit_5
 #define ENABLE_Y_TRIS 		TRISDbits.TRISD5
 
-#define ENABLE_Z 			LATDbits.LATD6
+#define ENABLE_Z 			g_LATD_enables.bit_6
 #define ENABLE_Z_TRIS 		TRISDbits.TRISD6
 
-#define ENABLE_A 			LATDbits.LATD7
+#define ENABLE_A 			g_LATD_enables	.bit_7
 #define ENABLE_A_TRIS 		TRISDbits.TRISD7
 
 #define HOME_X 				PORTAbits.RA2
@@ -202,7 +218,7 @@ void initIO();
 #define HOME_A 				PORTAbits.RA5
 #define HOME_A_TRIS 		TRISAbits.TRISA5
 
-#define LED_PIN   			LATBbits.LATB4
+#define LED_PIN   			g_LATB.bit_4
 #define LED_TRIS  			TRISBbits.TRISB4
 
 #define PROBE 				PORTAbits.RA1
@@ -212,16 +228,16 @@ void initIO();
 #define SPEED_TRIS			TRISAbits.TRISA0
 #define SPEED_CHANNEL		0
 
-#define TORQUE_X 			PORTBbits.RB0
+#define TORQUE_X 			g_LATB.bit_0
 #define TORQUE_X_TRIS		TRISBbits.TRISB0
 
-#define TORQUE_Y 			PORTBbits.RB1
+#define TORQUE_Y 			g_LATB.bit_1
 #define TORQUE_Y_TRIS		TRISBbits.TRISB1
 
-#define TORQUE_Z 			PORTBbits.RB2
+#define TORQUE_Z 			g_LATB.bit_2
 #define TORQUE_Z_TRIS		TRISBbits.TRISB2
 
-#define TORQUE_A 			PORTBbits.RB7
+#define TORQUE_A 			g_LATB.bit_7
 #define TORQUE_A_TRIS		TRISBbits.TRISB7
 
 #define SPINDLE_FWD 		LATEbits.LATE0
@@ -233,10 +249,10 @@ void initIO();
 #define OVERHEAT 			LATEbits.LATE2
 #define OVERHEAT_TRIS		TRISEbits.TRISE2
 
-#define SPINDLE_PWM 		PORTBbits.RB3
+#define SPINDLE_PWM 		g_LATB.bit_3
 #define SPINDLE_PWM_TRIS	TRISBbits.TRISB3
 
-#define COOLANT				PORTBbits.RB5
+#define COOLANT				g_LATB.bit_5
 #define COOLANT_TRIS		TRISBbits.TRISB5
 
 #endif

@@ -15,13 +15,14 @@
 	global	_g_busy_flags
 	global	_g_busy_bits
 	global	_g_ready_flags
-;	global	_g_ready_bits
 	global	_g_not_empty_flags
 	global	_g_pop_flags
 	global	_g_debug_count
+	global	_g_LATD_enables
+	global	_g_LATC
+	global	_g_LATB
 ;
 	global	_high_priority_interrupt_service
-	global	_g_pwm_out
 	global	_g_hipri_int_flags
 	global	_g_lopri_int_flags
 
@@ -44,22 +45,22 @@
 ;
 
 
-STATUS	equ	0xfd8
-PCL	equ	0xff9
-PCLATH	equ	0xffa
-PCLATU	equ	0xffb
-WREG	equ	0xfe8
-BSR	equ	0xfe0
-FSR0L	equ	0xfe9
-FSR0H	equ	0xfea
-FSR1L	equ	0xfe1
-FSR2L	equ	0xfd9
-INDF0	equ	0xfef
+STATUS		equ	0xfd8
+PCL		equ	0xff9
+PCLATH		equ	0xffa
+PCLATU		equ	0xffb
+WREG		equ	0xfe8
+BSR		equ	0xfe0
+FSR0L		equ	0xfe9
+FSR0H		equ	0xfea
+FSR1L		equ	0xfe1
+FSR2L		equ	0xfd9
+INDF0		equ	0xfef
 POSTINC0	equ	0xfee
 POSTDEC1	equ	0xfe5
-PREINC1	equ	0xfe4
-PRODL	equ	0xff3
-PRODH	equ	0xff4
+PREINC1		equ	0xfe4
+PRODL		equ	0xff3
+PRODH		equ	0xff4
 
 ;
 ;--------------------------------------------------------
@@ -70,17 +71,19 @@ PRODH	equ	0xff4
 ;
 #define motor_size 20
 
-_g_stepper_states		res 4*motor_size
-_g_busy_flags			res 1
-_g_busy_bits			res 1
-_g_ready_flags			res 1
-;_g_ready_bits			res 1
+_g_stepper_states	res 4*motor_size
+_g_busy_flags		res 1
+_g_busy_bits		res 1
+_g_ready_flags		res 1
 _g_not_empty_flags  	res 1
 _g_hipri_int_flags  	res 1
 _g_lopri_int_flags  	res 1
-_g_pop_flags  			res 1
-_g_pwm_out				res	1
-_g_debug_count			res	1
+_g_pop_flags  		res 1
+_g_step_out		res 2
+_g_LATB			res 1
+_g_LATC			res 1
+_g_LATD_enables		res 1
+_g_debug_count		res 1
 ;
 ;
 ;--------------------------------------------------------
@@ -107,11 +110,8 @@ _g_debug_count			res	1
 #define flags 9
 #define update_pos_bit 0
 #define next_dir_bit 1
-; next four are obsolete
-#define ready_bit 4
-#define ready2_bit ; 5
-#define not_busy_bit 6
-#define not_busy2_bit 7
+#define next_forward_bit 4
+#define next_reverse_bit 5
 
 #define group_mask 10
 ;#define busy_mask 11
@@ -126,22 +126,22 @@ _g_debug_count			res	1
 
 #define STEP_X_PORT _LATDbits
 #define STEP_X_BIT 0
-#define DIR_X_PORT _LATCbits
+#define DIR_X_PORT _g_LATC
 #define DIR_X_BIT 0
 
 #define STEP_Y_PORT _LATDbits
 #define STEP_Y_BIT 1
-#define DIR_Y_PORT _LATCbits
+#define DIR_Y_PORT _g_LATC
 #define DIR_Y_BIT 1
 
 #define STEP_Z_PORT _LATDbits
 #define STEP_Z_BIT 2
-#define DIR_Z_PORT _LATCbits
+#define DIR_Z_PORT _g_LATC
 #define DIR_Z_BIT 2
 
 #define STEP_4_PORT _LATDbits
 #define STEP_4_BIT 3
-#define DIR_4_PORT _LATBbits
+#define DIR_4_PORT _g_LATB
 #define DIR_4_BIT 6
 
 ;
@@ -162,7 +162,8 @@ STEP_GENERATOR_MACRO macro motor_flag_bit,motor,step_out_port,step_out_bit,dir_o
 	local not_busy
 	local all_done
 	local no_steps_left
-	local next_dir_reverse
+	local next_forward
+	local next_reverse
 	local no_next
 	local no_int
 ;
@@ -187,9 +188,9 @@ STEP_GENERATOR_MACRO macro motor_flag_bit,motor,step_out_port,step_out_bit,dir_o
 ;
 	DECF	(motor + steps), F
 ;
-;	STEP_OUTPUT = 0;// STEP signal = 0 generates a rising edge on next interrupt
+;	STEP_OUTPUT = 1; // STEP signal = 1 generates a rising edge on next interrupt
 ;
-	BCF		step_out_port, step_out_bit
+	BSF		step_out_port, step_out_bit, B
 	BRA		all_done
 ;
 no_steps_left:
@@ -200,19 +201,9 @@ no_steps_left:
 ;
 	MOVF	_g_hipri_int_flags, W, B
 	ANDWF	(motor + group_mask), W, B
-	BNZ		not_busy
+	BNZ		all_done
 ;
-;
-	IF DEBUG==1
-	BCF	_LATBbits,4
-	ENDIF
-;
-;	BTFSC	(_g_ready_flags), motor_flag_bit, B ; skip if clear == ready == 0
-;	BRA		all_done
-;
-;	BSF 	_PIR1, 2   	; // trig the queue processing with sw-interrupt
-;	BSF		(motor + flags), update_pos_bit, B
-	BSF		(_g_busy_flags), motor_flag_bit, B
+		BSF		(_g_busy_flags), motor_flag_bit, B
 	BSF		(_g_ready_flags), motor_flag_bit, B
 ;
 ;	MOTOR.steps = MOTOR.next_steps;
@@ -226,28 +217,24 @@ no_steps_left:
 ;
 ;	if (MOTOR.next_dir) {
 ;
-	BTFSS	(motor + flags), next_dir_bit, B
-	BRA		next_dir_reverse
+	BTFSC	(motor + flags), next_forward_bit, B
+	BRA	next_forward
+	BTFSC	(motor + flags), next_reverse_bit, B
+	BRA	next_reverse
+;
+	BRA		all_done
 ;
 ;		DIR_OUTPUT=1;
 ;
+next_forward
+	CLRF		(motor+nco+1), B
 	BSF		dir_out_port, dir_out_bit
 	BRA		all_done
 ;
-
-not_busy:
-	IF DEBUG==1
-	BSF	_LATBbits,4
-	ENDIF
-;
-	BRA		all_done
-
-;
-next_dir_reverse:
-;
-;		DIR_OUTPUT=0;
-;
+next_reverse
+	CLRF		(motor+nco+1), B
 	BCF		dir_out_port, dir_out_bit
+	BRA		all_done
 ;
 all_done:
 ;
@@ -258,52 +245,42 @@ all_done:
 S_stepperirq__high_priority_interrupt_service	code
 ;
 _high_priority_interrupt_service:
-;	MOVFF   BSR, POSTDEC1
 ;
 	BANKSEL	_g_stepper_states;
 ;
-;;;	BSF	_LATBbits, 4 ;// FIXME: THIS LINE JUST FOR TESTING
+; Clear the interrupt flag CCP1IF
 ;
-; FIXME, basically following is unnecessary also as this is the only hi priority interrupt....
-;	BTFSS	_PIR1bits, 1
-;	BRA	_00146_DS_
+	BCF	_PIR1bits, 2
 ;
+;	Update all outputs at once (step pulses are delayed by one interrupt period)
 ;
-	BCF	_PIR1bits, 1
+	MOVF    (_g_step_out + 0), W, B
+	IORWF   (_g_step_out + 1), W, B
+	IORWF   (_g_LATD_enables), W, B
+	MOVWF   _LATD
+	MOVFF   (_g_step_out + 0), (_g_step_out + 1)
+	CLRF    (_g_step_out + 0), B
 ;
-;	Turn ON all step outputs (=> rising edge if on previous interrupt the output was set OFF)
+	MOVFF   (_g_LATB), (_LATBbits)
+	MOVFF   (_g_LATC), (_LATCbits)
 ;
-	MOVLW	0x0f
-	IORWF	_LATD, F
+; Update flags
 ;
 	MOVF    _g_ready_flags, W, B
 	IORWF	_g_busy_flags, W, B
 	MOVWF   _g_hipri_int_flags, B
 ;	MOVFF	_g_ready_flags , _g_ready_bits
 ;
-	STEP_GENERATOR_MACRO 0, MOTOR_X, STEP_X_PORT, STEP_X_BIT, DIR_X_PORT, DIR_X_BIT, 0
+	STEP_GENERATOR_MACRO 0, MOTOR_X, _g_step_out, STEP_X_BIT, DIR_X_PORT, DIR_X_BIT, 0
 ;
-	STEP_GENERATOR_MACRO 1, MOTOR_Y, STEP_Y_PORT, STEP_Y_BIT, DIR_Y_PORT, DIR_Y_BIT, 0
+	STEP_GENERATOR_MACRO 1, MOTOR_Y, _g_step_out, STEP_Y_BIT, DIR_Y_PORT, DIR_Y_BIT, 0
 ;
-	STEP_GENERATOR_MACRO 2, MOTOR_Z, STEP_Z_PORT, STEP_Z_BIT, DIR_Z_PORT, DIR_Z_BIT, 0
+	STEP_GENERATOR_MACRO 2, MOTOR_Z, _g_step_out, STEP_Z_BIT, DIR_Z_PORT, DIR_Z_BIT, 0
 ;
-	STEP_GENERATOR_MACRO 3, MOTOR_4, STEP_4_PORT, STEP_4_BIT, DIR_4_PORT, DIR_4_BIT, 0
+	STEP_GENERATOR_MACRO 3, MOTOR_4, _g_step_out, STEP_4_BIT, DIR_4_PORT, DIR_4_BIT, 0
 ;
 _00146_DS_:
 ;
-;
-;
-	MOVF    _g_pwm_out, W, B
-	SUBWF   _TMR0L, W
-	BC      pwmout0
-	BSF     _LATBbits, 3
-	BRA     pwmout1
-pwmout0:
-	BCF     _LATBbits, 3
-pwmout1:
-
-;
-;	MOVFF   PREINC1, BSR
 	RETFIE	0x01
 ;
 ;

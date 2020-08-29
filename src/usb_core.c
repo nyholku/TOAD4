@@ -491,7 +491,7 @@ void process_control_transfer(void) {
 	}
 }
 
-void usbcdc_init() {
+void usb_core_init() {
 	UCFG = 0x14; // Enable pullup resistors; full speed mode
 
 	device_state = DETACHED;
@@ -517,7 +517,7 @@ void usbcdc_init() {
 	PIE3bits.USBIE = 1;
 }
 // Main entry point for USB tasks.  Checks interrupts, then checks for transactions.
-void usbcdc_handler(void) {
+void usb_core_handler(void) {
 	if ((UCFGbits.UTEYE == 1) || //eye test
 			(device_state == DETACHED) || //not connected
 			(UCONbits.SUSPND == 1)) //suspended

@@ -42,6 +42,7 @@
 #include "command_queue.h"
 #include "usb_hid.h"
 #include "usb_pic_defs.h"
+#include "swuart.h"
 #include <string.h> // memcpyram2ram, memcpypgm2ram
 
 #define HOME_0 HOME_X
@@ -154,6 +155,16 @@ static volatile uint8_t g_ADCresult;
 extern uint8_t g_hipri_int_flags;
 
 extern uint8_t g_lopri_int_flags;
+
+volatile uint8_t g_uart_msg[2];
+
+volatile uint8_t g_uart_msg_byte = 0;
+
+volatile uint8_t g_manmode_switches;
+
+volatile uint8_t g_manmode_potentiometer;
+
+volatile uint8_t g_manmode_on;
 
 #define BITCPY(d,s) do {if (s) d=1; else d=0;} while(0)
 
@@ -331,7 +342,6 @@ extern uint8_t g_debug_count;
 		COOLANT = 0; \
 	} while (0)
 
-
 #define UPDATE_PWM(x) do {\
 	uint16_t x16 = 0; \
 	if ((x) >= 18) \
@@ -339,8 +349,6 @@ extern uint8_t g_debug_count;
 	CCPR2L = x16>>2; \
 	CCP2CON = (CCP2CON & 0xCF) | ((x16 << 4) & 0x30); \
 	} while(0)
-
-
 
 // To change number of motors supported you need to
 // 1) change this macro
@@ -423,8 +431,7 @@ void low_priority_interrupt_service() __interrupt(2) {
 		PIR2bits.CCP2IF = 0;
 
 		FOR_EACH_MOTOR_DO(UPDATE_NOT_EMPTY);
-		g_lopri_int_flags = ~(g_ready_flags.ready_bits
-				& g_not_empty_flags.not_empty_bits);
+		g_lopri_int_flags = ~(g_ready_flags.ready_bits & g_not_empty_flags.not_empty_bits);
 		g_pop_flags.pop_bits = 0xFF;
 		FOR_EACH_MOTOR_DO(FEED_MORE);
 		FOR_EACH_MOTOR_DO(POP_QUEUE);
@@ -437,14 +444,15 @@ void low_priority_interrupt_service() __interrupt(2) {
 
 	if (INTCONbits.TMR0IF) {
 		INTCONbits.TMR0IF = 0;
+		swuart_tick(PORTAbits.RA0);
 	}
-	if (PIR2bits.CCP2IF) {
-		PIR2bits.CCP2IF = 0;
-	}
+//	if (PIR2bits.CCP2IF) {
+//		PIR2bits.CCP2IF = 0;
+//	}
 
 	if (PIR3bits.USBIF) {
 		PIR3bits.USBIF = 0;
-		usbcdc_handler();
+		usb_core_handler();
 	} // End of USB interrupt processing
 }
 
@@ -455,12 +463,14 @@ void enterBootloader() {
 }
 
 #define TOGGLE_LED_PIN()  do {if (LED_PIN) LED_PIN = 0; else LED_PIN = 1; } while(0)
+//#define TOGGLE_LED_PIN()  do {} while(0)
 
 void blink_led() {
 	static uint8_t old = 0;
 	uint8_t new;
- 	new = TMR0L; // need to read TMR0L to get TMR0H updated
-	new = TMR0H;
+	//new = TMR0L; // need to read TMR0L to get TMR0H updated
+	//new = TMR0H;
+	new = g_uart_tick_cntr; // since uart tick increments when 8 bit TMR0 overflows this is equivalent to previous
 	if (new != old) {
 		old = new;
 		g_blink_counter++;
@@ -484,9 +494,7 @@ void toggle_led() {
 }
 
 void check_for_firmware_update() {
-	if ((hid_rx_buffer.uint8[0] == 0xFE) && (hid_rx_buffer.uint8[1] == 0xED)
-			&& (hid_rx_buffer.uint8[2] == 0xC0)
-			&& (hid_rx_buffer.uint8[3] == 0xDE)) {
+	if ((hid_rx_buffer.uint8[0] == 0xFE) && (hid_rx_buffer.uint8[1] == 0xED) && (hid_rx_buffer.uint8[2] == 0xC0) && (hid_rx_buffer.uint8[3] == 0xDE)) {
 		hid_rx_buffer.uint8[63] = 0; // WHY?
 		enterBootloader();
 	}
@@ -498,6 +506,55 @@ void check_probe() {
 		g_probe.probe_triggered = 1;
 	if (!g_probe.probe_input & g_probe.probe_armed_trig_on_0)
 		g_probe.probe_triggered = 1;
+}
+
+void handle_manual_mode() {
+	if (g_uart_rx_ready) {
+		g_uart_rx_ready = 0;
+		// note that a new char arrives at 30 msec interval so we trust
+		// that g_uart_rx_data does not change on us
+		if (g_uart_rx_bit9 == 1) { // first byte
+			if (g_uart_rx_data == 0xFF) {
+				//LED_PIN=1;
+				g_uart_msg_byte = 1;
+			}
+		} else { // rest of the bytes
+			if (g_uart_rx_bit9 == 1)
+				g_uart_msg_byte = 0;
+			switch (g_uart_msg_byte++) {
+			default:
+				g_uart_msg_byte = 0;
+				break;
+			case 1:
+				g_uart_msg[0] = g_uart_rx_data;
+				break;
+			case 2:
+				if (g_uart_msg[0] != (uint8_t)(~g_uart_rx_data))
+					g_uart_msg_byte = 0;
+				break;
+			case 3:
+				g_uart_msg[1] = g_uart_rx_data;
+				break;
+			case 4:
+				if (g_uart_msg[1] != (uint8_t)(~g_uart_rx_data)) {
+					g_uart_msg_byte = 0;
+					break;
+				}
+				if (((g_uart_msg[0] ^ (g_uart_msg[0] >> 4)) & 0xF) == 0xF) {
+					//LED_PIN=0;
+					// Got the full message, now process it
+					g_manmode_potentiometer = g_uart_msg[1];
+					UPDATE_PWM(g_manmode_potentiometer);
+					g_manmode_switches = g_uart_msg[0] >> 4;
+					SPINDLE_FWD = g_manmode_switches & 0x2;
+					SPINDLE_REV = g_manmode_switches & 0x4;
+					COOLANT = g_manmode_switches & 0x8;
+				}
+				break;
+			}
+		}
+	}
+
 }
 
 void main(void) {
@@ -526,7 +583,7 @@ void main(void) {
 
 	T0CONbits.T0CS = 0; // Internal instruction clock as source for timer 0
 	T0CONbits.PSA = 0;  // Enable prescaler for Timer 0
-	T0CONbits.T08BIT = 0; //  16 bit
+	T0CONbits.T08BIT = 1; //  8 bit
 
 	T0CONbits.T0PS2 = 1; // prescaler 1:32 => 1464 Hz
 	T0CONbits.T0PS1 = 0;
@@ -570,19 +627,18 @@ void main(void) {
 	INTCON3 = 0;
 
 	// ... except make  CCP1 interrupt  high priority
-	IPR1bits.CCP1IP = 1;// was TMR2IP !!
+	IPR1bits.CCP1IP = 1;	// was TMR2IP !!
 	RCONbits.IPEN = 1; // enable priorities
-
 
 	// TIMER 2 configuration
 	T2CONbits.T2CKPS0 = 1;
 	T2CONbits.T2CKPS1 = 1;
 	PR2 = 255;
-	CCPR2L =25;
+	CCPR2L = 25;
 	CCP2CONbits.CCP2M = 0x0C; // PWM mode
 	T2CONbits.TMR2ON = 1;
 
-	T3GCONbits.TMR3GE = 0; // XXX always on
+	T3GCONbits.TMR3GE = 0;
 
 	T3CONbits.T3CKPS0 = 1;
 	T3CONbits.T3CKPS1 = 1;
@@ -600,7 +656,7 @@ void main(void) {
 	TRISBbits.TRISB3 = 0;
 
 	// Initialize the USB stack
-	usbcdc_init();
+	usb_core_init();
 
 	// Turn the run LED on
 	LED_PIN = 0;
@@ -619,28 +675,35 @@ void main(void) {
 	//PIE2bits.TMR3IE = 1;
 	PIE2bits.CCP2IE = 1;
 
+	INTCONbits.TMR0IE = 1; // enable peripheral interrupts
 	INTCONbits.PEIE = 1; // enable peripheral interrupts
 	INTCONbits.GIE = 1; // global interrupt enable
 
 	// Enable the watchdog
 	WDTCONbits.SWDTEN = 1;
 
-
 	while (1) {
 		__asm__ (" CLRWDT  ");
-        
+		
         // trig sw interrupt so that the queues get updated
         PIR2bits.CCP2IF = 1;
-
+		
+		// If manual/cnc mode changes clear spindle and coolant
+		if (g_manmode_on != (g_uart_connected != 0)) {
+			g_manmode_on = !g_manmode_on;
+			UPDATE_OUTPUTS(0);
+			UPDATE_PWM(0);
+		}
+		if (g_manmode_on)
+			handle_manual_mode();
 		if (!(ep2_o.STAT & UOWN)) { // new data from host, so process it
 			g_message_id = hid_rx_buffer.uint8[63];
 			toggle_led();
 
-
-			if (hid_rx_buffer.uint8[0] == 0x73) { // watchdog test
-				while (1)
-					;
-			} else if (hid_rx_buffer.uint8[0] == 0xFE) { // special message
+			while (hid_rx_buffer.uint8[0] == 0x73) { // watchdog test
+				// loops until watchdog reset
+			}
+			if (hid_rx_buffer.uint8[0] == 0xFE) { // special message
 				check_for_firmware_update(); // may not ever return
 				g_special_request = hid_rx_buffer.uint8[1];
 			} else { // normal message
@@ -653,27 +716,21 @@ void main(void) {
 				FOR_EACH_MOTOR_DO(PROCESS_MOTOR_COMMANDS);
 
 				UPDATE_OUTPUTS(hid_rx_buffer.uint8[50]);
-
-				//g_pwm_out = hid_rx_buffer.uint8[52];
 				UPDATE_PWM(hid_rx_buffer.uint8[52]);
 
-
-				BITCPY(g_probe.probe_armed_trig_on_1,
-						0x01 & hid_rx_buffer.uint8[49]);
-				BITCPY(g_probe.probe_armed_trig_on_0,
-						0x02 & hid_rx_buffer.uint8[49]);
-				if (!g_probe.probe_armed_trig_on_1
-						&& !g_probe.probe_armed_trig_on_0)
+				BITCPY(g_probe.probe_armed_trig_on_1, 0x01 & hid_rx_buffer.uint8[49]);
+				BITCPY(g_probe.probe_armed_trig_on_0, 0x02 & hid_rx_buffer.uint8[49]);
+				if (!g_probe.probe_armed_trig_on_1 && !g_probe.probe_armed_trig_on_0)
 					g_probe.probe_triggered = 0;
 
 			}
 			// turn the buffer over to SIE so we can get more data
 			ep2_o.CNT = 64;
 			if (ep2_o.STAT & DTS)
-				ep2_o.STAT = UOWN | DTSEN;
+				ep2_o.STAT = DTSEN;
 			else
-				ep2_o.STAT = UOWN | DTS | DTSEN;
-
+				ep2_o.STAT = DTS | DTSEN;
+			ep2_o.STAT |= UOWN;
 		}
 
 		// update toad4 status, we do this all the time so as to be ready when we can send it over
@@ -685,7 +742,7 @@ void main(void) {
 		if (ADCON0bits.GO_NOT_DONE == 0) {
 			g_ADCresult = ADRESH;
 			ADCON0bits.GO_NOT_DONE = 1;
-			}
+		}
 
 		if (!(ep2_i.STAT & UOWN)) {	// we own the USB buffer, so update data going to the host
 			g_blink_speed = 1;
@@ -732,8 +789,13 @@ void main(void) {
 				hid_tx_buffer.uint8[50] = PORTA; //0; // digital inputs 0-7
 				hid_tx_buffer.uint8[51] = 0; // digital inputs 8-15
 				hid_tx_buffer.uint8[52] = g_ADCresult; // analog input 0
-				hid_tx_buffer.uint8[53] = 0;
-				hid_tx_buffer.uint8[54] = 0;
+				if (g_uart_connected) {
+					hid_tx_buffer.uint8[53] = g_manmode_switches;
+					hid_tx_buffer.uint8[54] = g_manmode_potentiometer;
+				} else {
+					hid_tx_buffer.uint8[53] = 0;
+					hid_tx_buffer.uint8[54] = 0;
+				}
 				hid_tx_buffer.uint8[55] = STEPPER(0).group_mask;
 				hid_tx_buffer.uint8[56] = STEPPER(1).group_mask;
 				hid_tx_buffer.uint8[57] = STEPPER(2).group_mask;
@@ -746,11 +808,13 @@ void main(void) {
 			// turn the buffer over to the SIE so the host will pick it up
 			ep2_i.CNT = 64;
 			if (ep2_i.STAT & DTS)
-				ep2_i.STAT = UOWN | DTSEN;
+				ep2_i.STAT = DTSEN;
 			else
-				ep2_i.STAT = UOWN | DTS | DTSEN;
+				ep2_i.STAT = DTS | DTSEN;
+			ep2_i.STAT |= UOWN;
 		}
-
+		
 		blink_led();
+
 	}
 }

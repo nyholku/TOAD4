@@ -50,7 +50,7 @@ __code g_toad4_config_t g_toad4_config = {
 #if TOAD_HW_VERSION==HW4
 
 void initIO() {
-	ANSELA = 0x01;
+	ANSELA = 0x00;
 	ANSELB = 0x00;
 	ANSELC = 0x00;
 	ANSELD = 0x00;
@@ -157,7 +157,7 @@ void initIO() {
     //ANSELAbits.ANSA0=1; // AN0
     //TRISAbits.TRISA0=1; // RA0
 
-	SPEED_ANSEL = 1;
+	//SPEED_ANSEL = 1;
 	SPEED_TRIS = 1;
     // ADC channel selection
 

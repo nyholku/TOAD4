@@ -56,8 +56,8 @@ extern uint8_t device_state;
 extern uint8_t device_address;
 extern uint8_t current_configuration;
 
-void usbcdc_init(void);
-void usbcdc_handler(void);
+void usb_core_init(void);
+void usb_core_handler(void);
 
 
 char usbcdc_wr_busy();

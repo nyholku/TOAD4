@@ -35,7 +35,7 @@
 # pk2cmd to find its support files (it seems to search current dir which is wrong)
 PATH := ${PATH}
 
-UPLOADER := java -cp ~/EazyCNC-Project/classes:/Users/nyholku/PureJavaHidApi/bin/purejavahidapi.jar:/Users/Nyholku/PureJavaHidApi/lib/jna-4.0.0.jar diolanupdater.UpdateFirmware
+UPLOADER := java -cp ~/EazyCNC-Project/classes:/Users/nyholku/EazyCNC-Project/lib/purejavahidapi-0.0.12.jar:/Users/nyholku/EazyCNC-Project/lib/jna-5.5.0.jar diolanupdater.UpdateFirmware
 ENCODER := /Users/nyholku/diolan-plus2/encoder/build/encoder 
 HEXMATE :=  /Applications/microchip/mplabx/v3.55/mplab_ide.app/Contents/Resources/mplab_ide/bin/hexmate
 
@@ -43,7 +43,7 @@ HEXMATE :=  /Applications/microchip/mplabx/v3.55/mplab_ide.app/Contents/Resource
 TARGET = toad4
 
 # The source files that make up the project go here 
-SRCS = main.c toad4.c usb_hid.c usb_core.c usb_pic_defs.c usb_user_config.c command_queue.c crt0iz_toad4.c
+SRCS = main.c toad4.c usb_hid.c usb_core.c usb_pic_defs.c usb_user_config.c command_queue.c crt0iz_toad4.c swuart.c
  
 # The libraries that are used go here
 LIBS =  libc18f.lib libio18f45k50.lib libm18f.lib libsdcc.lib 

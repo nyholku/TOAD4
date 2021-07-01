@@ -49,20 +49,23 @@
 #define HOME_1 HOME_Y
 #define HOME_2 HOME_Z
 #define HOME_3 HOME_A
+#define HOME_4 HOME_B
 
 #define ENABLE_0 ENABLE_X
 #define ENABLE_1 ENABLE_Y
 #define ENABLE_2 ENABLE_Z
 #define ENABLE_3 ENABLE_A
+#define ENABLE_4 ENABLE_B
 
-#define TORQUE_0 TORQUE_X
+/*
+#define TORQUE_0 TORQUE_
 #define TORQUE_1 TORQUE_Y
 #define TORQUE_2 TORQUE_Z
 #define TORQUE_3 TORQUE_A
+*/
 
 #define ENABLE_MOTOR(i,e) do { \
 	ENABLE_##i = e; \
-	TORQUE_##i = e; \
 	} while (0)
 
 #define CMD_MOVE 1
@@ -139,6 +142,20 @@ static union {
 		unsigned bit_7 :1;
 	};
 } g_probe;
+
+static union {
+	uint8_t uint8;
+	struct {
+		unsigned arc_transfer :1; // bit 0
+		unsigned bit_1 :1;
+		unsigned bit_2 :1;
+		unsigned bit_3 :1;
+		unsigned bit_4 :1;
+		unsigned bit_5 :1;
+		unsigned bit_6 :1;
+		unsigned bit_7 :1;
+	};
+} g_digital_inputs;
 
 static volatile toad4_status_t g_toad4_status; // this gets sent to host in toto
 
@@ -327,25 +344,34 @@ extern uint8_t g_debug_count;
 #define UPDATE_GROUP_MASK_3(i) \
 		STEPPER(i).group_mask = g_group_masks[STEPPER(i).sync_group]
 
-#define UPDATE_OUTPUTS(x)  do { \
-	if ((x) & 0x01) \
-		SPINDLE_FWD = 1; \
-	else \
-		SPINDLE_FWD = 0; \
-	if ((x) & 0x02) \
-		SPINDLE_REV = 1; \
-	else \
-		SPINDLE_REV = 0; \
-	if ((x) & 0x04) \
-		COOLANT = 1; \
-	else \
-		COOLANT = 0; \
-	} while (0)
+void UPDATE_OUTPUTS(unsigned char x)   {
+	if ((x) & 0x01)
+		SPINDLE_FWD = 1;
+	else
+		SPINDLE_FWD = 0;
+	if ((x) & 0x02)
+		SPINDLE_REV = 1;
+	else
+		SPINDLE_REV = 0;
+	if ((x) & 0x04)
+		COOLANT = 1;
+	else
+		COOLANT = 0;
+#if TOAD_HW_VERSION== HW5
+	if ((x) & 0x08)
+		ARC_START = 1;
+	else
+		ARC_START = 0;
+#endif
+	}
 
+// 0-17 => 0
+// 18 => 0
+// 255 => 948
 #define UPDATE_PWM(x) do {\
 	uint16_t x16 = 0; \
-	if ((x) >= 18) \
-		x16=(x)*4-72;\
+	if ((x)>0) \
+		x16=35+x*62/16; \
 	CCPR2L = x16>>2; \
 	CCP2CON = (CCP2CON & 0xCF) | ((x16 << 4) & 0x30); \
 	} while(0)
@@ -424,6 +450,8 @@ volatile uint16_t g_pwm_lo = 2400;
 volatile uint16_t g_pwm_hi = 2400;
 volatile uint8uint16_t g_ccp2_next;
 volatile uint8uint16_t g_tmr3;
+char rxbyte[4]={0};
+static unsigned char rxcnt=0;
 
 void low_priority_interrupt_service() __interrupt(2) {
 	if (PIR2bits.CCP2IF) {
@@ -444,7 +472,7 @@ void low_priority_interrupt_service() __interrupt(2) {
 
 	if (INTCONbits.TMR0IF) {
 		INTCONbits.TMR0IF = 0;
-		swuart_tick(PORTAbits.RA0);
+		swuart_tick(SW_UART);
 	}
 //	if (PIR2bits.CCP2IF) {
 //		PIR2bits.CCP2IF = 0;
@@ -453,7 +481,19 @@ void low_priority_interrupt_service() __interrupt(2) {
 	if (PIR3bits.USBIF) {
 		PIR3bits.USBIF = 0;
 		usb_core_handler();
-	} // End of USB interrupt processing
+	}
+
+ 	if (PIR1bits.RC1IF) {
+ 		uint8_t temp = RCREG1;
+		PIR1bits.RC1IF = 0;
+ 		if (temp==0xff && RCSTA1bits.RX9D==1) {
+ 			rxcnt=0;
+ 		} else {
+ 			if (rxcnt<4) {
+ 				rxbyte[rxcnt++]=temp;
+ 				}
+ 		}
+ 	}
 }
 
 #pragma restore
@@ -462,7 +502,7 @@ void enterBootloader() {
 	__asm__ (" goto 0x0016\n");
 }
 
-#define TOGGLE_LED_PIN()  do {if (LED_PIN) LED_PIN = 0; else LED_PIN = 1; } while(0)
+#define TOGGLE_LED_PIN()  do {if (LED_PIN==LED_OFF) LED_PIN = LED_ON; else LED_PIN = LED_OFF; } while(0)
 //#define TOGGLE_LED_PIN()  do {} while(0)
 
 void blink_led() {
@@ -562,11 +602,18 @@ void main(void) {
 	// FIXME, should we actually clear them not at startup (here)
 	// but AFTER connecting to the host so that cycling MACH
 	// in EazyCNC would clear the watcdog error/message?
+	unsigned int i;
+	ANSELA = 0x00;
+ 	TRISA = 0xC0;
+	LATA = 0x15;
+
 
 	g_RCON = RCON;
 	RCON |= 0x1F;
 
+
 	initIO();
+
 
 	g_ready_flags.ready_bits = 0xFF;
 	g_busy_flags.busy_bits = 0x00;
@@ -576,6 +623,8 @@ void main(void) {
 	FOR_EACH_MOTOR_DO(UPDATE_GROUP_MASK_1);
 	FOR_EACH_MOTOR_DO(UPDATE_GROUP_MASK_2);
 	FOR_EACH_MOTOR_DO(UPDATE_GROUP_MASK_3);
+
+
 
 	// FIXME why do we configure RC6 which is USART TX as output, it is not used.
 	// Was it for debugging?
@@ -658,8 +707,29 @@ void main(void) {
 	// Initialize the USB stack
 	usb_core_init();
 
+
 	// Turn the run LED on
-	LED_PIN = 0;
+	LED_PIN = LED_ON;
+
+
+	// Init EUSART
+    // ABDOVF no_overflow; CKTXP async_noninverted_sync_fallingedge; BRG16 16bit_generator; WUE disabled; ABDEN disabled; DTRXP not_inverted;
+    BAUDCON1 = 0x08;
+
+    // SPEN enabled; RX9 9-bit; CREN enabled; ADDEN disabled; SREN disabled;
+    RCSTA1 = 0xD0;
+
+    // TX9 9-bit; TX9D 0; SENDB sync_break_complete; TXEN enabled; SYNC asynchronous; BRGH hi_speed; CSRC slave_mode;
+    TXSTA1 = 0x64;
+
+    // SPBRG1 1249;
+    SPBRG1 = 1249%256;
+
+    // SPBRGH1 0;
+    SPBRGH1 = 1249/256;
+
+
+
 
 	// This seems to be as good a place as any to document interrupt usage
 	// TMR2 interrupt = high priority, written in asm, running the NCOs (Numerically Controlled Oscillators)
@@ -669,25 +739,37 @@ void main(void) {
 	// CCP2 interrupt =  no function
 
 	// Enable interrupts
-	//PIE1bits.TMR2IE = 0; // ! was
+
 	PIE1bits.CCP1IE = 1;
 	PIE3bits.USBIE = 1;
-	//PIE2bits.TMR3IE = 1;
 	PIE2bits.CCP2IE = 1;
+	INTCONbits.TMR0IE = 1;
+	PIE1bits.RCIE = 1;
 
-	INTCONbits.TMR0IE = 1; // enable peripheral interrupts
+
 	INTCONbits.PEIE = 1; // enable peripheral interrupts
 	INTCONbits.GIE = 1; // global interrupt enable
 
+/*
+	g_manmode_on = 1;
+	TRISCbits.TRISC2 = 0; // dir=output
+    LATCbits.LATC2 = 1;
+	while (1) {
+		unsigned int i=0;
+		for (i=0; i<65535; i++)
+			g_manmode_on=1;
+		LATCbits.LATC2 = !LATCbits.LATC2;
+		}
+*/
 	// Enable the watchdog
 	WDTCONbits.SWDTEN = 1;
 
 	while (1) {
 		__asm__ (" CLRWDT  ");
-		
+
         // trig sw interrupt so that the queues get updated
         PIR2bits.CCP2IF = 1;
-		
+
 		// If manual/cnc mode changes clear spindle and coolant
 		if (g_manmode_on != (g_uart_connected != 0)) {
 			g_manmode_on = !g_manmode_on;
@@ -762,9 +844,11 @@ void main(void) {
 				memcpyram2ram(&hid_tx_buffer.uint8[8], &g_toad4_status.steppers[1], 8);
 				memcpyram2ram(&hid_tx_buffer.uint8[16], &g_toad4_status.steppers[2], 8);
 				memcpyram2ram(&hid_tx_buffer.uint8[24],	&g_toad4_status.steppers[3], 8);
+				memcpyram2ram(&hid_tx_buffer.uint8[32],	&g_toad4_status.steppers[4], 8);
 
 				// FIXME, see if above and below could be combined to a single memcpyram2ram by
 				// rearranging the structures
+                /* DEBUG STUFF
 				hid_tx_buffer.uint8[32] = g_stepper_states[0].steps;
 				hid_tx_buffer.uint8[33] = g_stepper_states[0].last_steps;
 				hid_tx_buffer.uint8[34] = g_stepper_states[0].next_steps;
@@ -784,22 +868,26 @@ void main(void) {
 				hid_tx_buffer.uint8[45] = g_stepper_states[3].last_steps;
 				hid_tx_buffer.uint8[46] = g_stepper_states[3].next_steps;
 				hid_tx_buffer.uint8[47] = g_stepper_states[3].update_pos;
-
+                */
 				hid_tx_buffer.uint8[49] = g_probe.uint8; // & 0x03; //
-				hid_tx_buffer.uint8[50] = PORTA; //0; // digital inputs 0-7
+#if TOAD_HW_VERSION== HW5
+				g_digital_inputs.arc_transfer = ARC_TRANSFER;
+#endif
+				hid_tx_buffer.uint8[50] = g_digital_inputs.uint8;
+
 				hid_tx_buffer.uint8[51] = 0; // digital inputs 8-15
-				hid_tx_buffer.uint8[52] = g_ADCresult; // analog input 0
-				if (g_uart_connected) {
+				hid_tx_buffer.uint8[52] = rxbyte[0]; // g_ADCresult; // analog input 0
+				if (g_manmode_on) {
 					hid_tx_buffer.uint8[53] = g_manmode_switches;
 					hid_tx_buffer.uint8[54] = g_manmode_potentiometer;
 				} else {
 					hid_tx_buffer.uint8[53] = 0;
 					hid_tx_buffer.uint8[54] = 0;
 				}
-				hid_tx_buffer.uint8[55] = STEPPER(0).group_mask;
-				hid_tx_buffer.uint8[56] = STEPPER(1).group_mask;
-				hid_tx_buffer.uint8[57] = STEPPER(2).group_mask;
-				hid_tx_buffer.uint8[58] = STEPPER(3).group_mask;
+				hid_tx_buffer.uint8[55] = rxbyte[0]; //rxbyte[0];// STEPPER(0).group_mask;
+				hid_tx_buffer.uint8[56] = rxbyte[1];//STEPPER(1).group_mask;
+				hid_tx_buffer.uint8[57] = rxbyte[2];//STEPPER(2).group_mask;
+				hid_tx_buffer.uint8[58] = rxbyte[3];//STEPPER(3).group_mask;
 				hid_tx_buffer.uint8[59] = g_debug_count;
 				hid_tx_buffer.uint8[60] = g_not_empty_flags.not_empty_bits;
 				hid_tx_buffer.uint8[61] = g_busy_flags.busy_bits;
@@ -813,8 +901,16 @@ void main(void) {
 				ep2_i.STAT = DTS | DTSEN;
 			ep2_i.STAT |= UOWN;
 		}
-		
-		blink_led();
 
+    if(1 == RCSTA1bits.OERR)
+    {
+        // EUSART1 error - restart
+
+        RCSTA1bits.CREN = 0;
+        RCSTA1bits.CREN = 1;
+    }
+	if (PIR1bits.TX1IF)
+		TXREG1 =0x00;
+	blink_led();
 	}
 }

@@ -18,6 +18,9 @@
 	global	_g_not_empty_flags
 	global	_g_pop_flags
 	global	_g_debug_count
+	global	_g_LATD_enables
+	global	_g_LATC
+	global	_g_LATB
 ;
 	global	_high_priority_interrupt_service
 	global	_g_hipri_int_flags
@@ -32,7 +35,6 @@
 	extern	_LATCbits
 	extern	_LATDbits
 	extern	_PIR1bits
-	extern	_LATA
 	extern	_LATD
 	extern	_PIR1
 	extern	_TMR0L
@@ -69,7 +71,7 @@ PRODH		equ	0xff4
 ;
 #define motor_size 20
 
-_g_stepper_states	res 5*motor_size
+_g_stepper_states	res 4*motor_size
 _g_busy_flags		res 1
 _g_busy_bits		res 1
 _g_ready_flags		res 1
@@ -78,7 +80,9 @@ _g_hipri_int_flags  	res 1
 _g_lopri_int_flags  	res 1
 _g_pop_flags  		res 1
 _g_step_out		res 2
-_g_dir_out			res 2
+_g_LATB			res 1
+_g_LATC			res 1
+_g_LATD_enables		res 1
 _g_debug_count		res 1
 ;
 ;
@@ -95,8 +99,7 @@ _g_debug_count		res 1
 #define MOTOR_X (_g_stepper_states + 0 * motor_size)
 #define MOTOR_Y (_g_stepper_states + 1 * motor_size)
 #define MOTOR_Z (_g_stepper_states + 2 * motor_size)
-#define MOTOR_A (_g_stepper_states + 3 * motor_size)
-#define MOTOR_B (_g_stepper_states + 4 * motor_size)
+#define MOTOR_4 (_g_stepper_states + 3 * motor_size)
 
 #define nco 0
 #define speed 2
@@ -121,20 +124,25 @@ _g_debug_count		res 1
 ;--------------------------------------------------------
 ;
 
+#define STEP_X_PORT _LATDbits
 #define STEP_X_BIT 0
+#define DIR_X_PORT _g_LATC
 #define DIR_X_BIT 0
 
+#define STEP_Y_PORT _LATDbits
 #define STEP_Y_BIT 1
+#define DIR_Y_PORT _g_LATC
 #define DIR_Y_BIT 1
 
+#define STEP_Z_PORT _LATDbits
 #define STEP_Z_BIT 2
+#define DIR_Z_PORT _g_LATC
 #define DIR_Z_BIT 2
 
-#define STEP_A_BIT 3
-#define DIR_A_BIT 3
-
-#define STEP_B_BIT 4
-#define DIR_B_BIT 4
+#define STEP_4_PORT _LATDbits
+#define STEP_4_BIT 3
+#define DIR_4_PORT _g_LATB
+#define DIR_4_BIT 6
 
 ;
 ;--------------------------------------------------------
@@ -149,7 +157,7 @@ ivec_0x1_high_priority_interrupt_service: code	0X000808
 ;
 ; Here we define a macro to do the actual step pulse generation
 ;
-STEP_GENERATOR_MACRO macro motor_flag_bit,motor,step_out_bit,dir_out_bit,DEBUG
+STEP_GENERATOR_MACRO macro motor_flag_bit,motor,step_out_port,step_out_bit,dir_out_port,dir_out_bit,DEBUG
 ;
 	local not_busy
 	local all_done
@@ -182,7 +190,7 @@ STEP_GENERATOR_MACRO macro motor_flag_bit,motor,step_out_bit,dir_out_bit,DEBUG
 ;
 ;	STEP_OUTPUT = 1; // STEP signal = 1 generates a rising edge on next interrupt
 ;
-	BSF		_g_step_out, step_out_bit, B
+	BSF		step_out_port, step_out_bit, B
 	BRA		all_done
 ;
 no_steps_left:
@@ -220,12 +228,12 @@ no_steps_left:
 ;
 next_forward
 	CLRF		(motor+nco+1), B
-	BSF		_g_dir_out, dir_out_bit
+	BSF		dir_out_port, dir_out_bit
 	BRA		all_done
 ;
 next_reverse
 	CLRF		(motor+nco+1), B
-	BCF		_g_dir_out, dir_out_bit
+	BCF		dir_out_port, dir_out_bit
 	BRA		all_done
 ;
 all_done:
@@ -246,15 +254,15 @@ _high_priority_interrupt_service:
 ;
 ;	Update all outputs at once (step pulses are delayed by one interrupt period)
 ;
-	MOVF    (_g_step_out + 0), W, B ; _g_step_out[0] was updated on previous interrupt so it is delayed
-	IORWF   (_g_step_out + 1), W, B ; lengthen the pulses by or'ing the two last outputs
+	MOVF    (_g_step_out + 0), W, B
+	IORWF   (_g_step_out + 1), W, B
+	IORWF   (_g_LATD_enables), W, B
 	MOVWF   _LATD
-;
 	MOVFF   (_g_step_out + 0), (_g_step_out + 1)
 	CLRF    (_g_step_out + 0), B
 ;
-	MOVFF   (_g_dir_out + 1), (_LATA) ; FIXME, shouldn't this be after STEP_GENERATOR_MACRO so that DIR gets updated asap
-	MOVFF   (_g_dir_out + 0), (_g_dir_out + 1)
+	MOVFF   (_g_LATB), (_LATBbits)
+	MOVFF   (_g_LATC), (_LATCbits)
 ;
 ; Update flags
 ;
@@ -263,16 +271,13 @@ _high_priority_interrupt_service:
 	MOVWF   _g_hipri_int_flags, B
 ;	MOVFF	_g_ready_flags , _g_ready_bits
 ;
-	STEP_GENERATOR_MACRO 0, MOTOR_X, STEP_X_BIT, DIR_X_BIT, 0
+	STEP_GENERATOR_MACRO 0, MOTOR_X, _g_step_out, STEP_X_BIT, DIR_X_PORT, DIR_X_BIT, 0
 ;
-	STEP_GENERATOR_MACRO 1, MOTOR_Y, STEP_Y_BIT, DIR_Y_BIT, 0
+	STEP_GENERATOR_MACRO 1, MOTOR_Y, _g_step_out, STEP_Y_BIT, DIR_Y_PORT, DIR_Y_BIT, 0
 ;
-	STEP_GENERATOR_MACRO 2, MOTOR_Z, STEP_Z_BIT, DIR_Z_BIT, 0
+	STEP_GENERATOR_MACRO 2, MOTOR_Z, _g_step_out, STEP_Z_BIT, DIR_Z_PORT, DIR_Z_BIT, 0
 ;
-	STEP_GENERATOR_MACRO 3, MOTOR_A, STEP_A_BIT, DIR_A_BIT, 0
-;
-	STEP_GENERATOR_MACRO 4, MOTOR_B, STEP_B_BIT, DIR_B_BIT, 0
-;
+	STEP_GENERATOR_MACRO 3, MOTOR_4, _g_step_out, STEP_4_BIT, DIR_4_PORT, DIR_4_BIT, 0
 ;
 _00146_DS_:
 ;

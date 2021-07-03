@@ -60,9 +60,8 @@ SDCCFLAGS = "-Wl -f 0xffff" -DTOAD_HW_VERSION=${HWVERSION} --verbose --no-crt --
 
 # Where to store the target/intermediate/temporary/object files
 OBJDIR = ../obj
-
-
-
+#-------------------------------------------------------------------------------
+#
 .PHONY: toad4
 toad4: $(OBJDIR)/$(TARGET).hex
 toad4: HI_SPEED_IRQ_ASM :=hi_speed_irq-hw4.asm
@@ -70,17 +69,24 @@ toad4: HWVERSION := HW4
 toad4: BOOTLOADER := ../diolan-plus2-toad4/fw/bootloader.hex
 
 .PHONY: toad5
-toad5: $(OBJDIR)/$(TARGET).hex
 toad5: HI_SPEED_IRQ_ASM :=hi_speed_irq.asm
 toad5: HWVERSION := HW5
 toad5: BOOTLOADER := ../diolan-plus2-toad5/fw/bootloader.hex
+toad5: $(OBJDIR)/$(TARGET).hex
+#
+
+#-------------------------------------------------------------------------------
+.PHONY: load
+load:
+	$(UPLOADER) $(OBJDIR)/$(TARGET)-encoded.hex
+#-------------------------------------------------------------------------------
 
 .PHONY: comparebootloaders
 comparebootloaders:
 	$(HEXMATE) -o$../bootloader-backedp.hex -fill=0xFF@0x0000:0x07FF r0000-07FF,/Volumes/Partition2/Users/nyholku/diolan-plus2/fw-backup-25.7.2017/bootloader.hex r000802-FFFFFF,/Volumes/Partition2/Users/nyholku/diolan-plus2/fw-backup-25.7.2017/bootloader.hex
 	$(HEXMATE) -o$../bootloader-toad4.hex -fill=0xFF@0x0000:0x07FF r0000-07FF,../diolan-plus2-toad4/fw/bootloader.hex r000802-FFFFFF,../diolan-plus2-toad4/fw/bootloader.hex
 	$(HEXMATE) -o$../bootloader-toad5.hex -fill=0xFF@0x0000:0x07FF r0000-07FF,../diolan-plus2-toad5/fw/bootloader.hex r000802-FFFFFF,../diolan-plus2-toad5/fw/bootloader.hex
-
+#
 #
 #-------------------------------------------------------------------------------
 #
@@ -130,10 +136,6 @@ $(OBJDIR)/hi_speed_irq.o: ${HI_SPEED_IRQ_ASM}
 
 #
 #-------------------------------------------------------------------------------
-.PHONY: load
-load:
-	$(UPLOADER) $(OBJDIR)/$(TARGET)-encoded.hex
-#-------------------------------------------------------------------------------
 #
 # Automatic generation of dependencies
 #
@@ -149,11 +151,11 @@ load:
 #
 
 # First include the dependencies
-#include $(addprefix $(OBJDIR)/, $(SRCS:.c=.dep))
+include $(addprefix $(OBJDIR)/, $(SRCS:.c=.dep))
 
 # Then recreate them
 #$(OBJDIR)/%.dep: %.c $$(@D)/.f
-#	 @set -e; rm -f $@; \
+#	 set -e; rm -f $@; \
 #	  $(SDCC) -c -M $(SDCCFLAGS) $< > $@.$$$$; \
 #	  sed -e '1 s,^,$(OBJDIR)/,' -e 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
 #    rm -f $@.$$$$
@@ -162,7 +164,7 @@ load:
 #
 # pretty standard default target
 #
-all:	$(OBJDIR)/$(TARGET).hex
+all:	toad5
 #
 #-------------------------------------------------------------------------------
 #

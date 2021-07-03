@@ -31,15 +31,6 @@
 # Everyone should have this
 .SUFFIXES:
 
-
-HWVERSION := HW4
-
-ifeq ($(HWVERSION), HW4)
-	HI_SPEED_IRQ_ASM :=hi_speed_irq-hw4.asm
-else
-	HI_SPEED_IRQ_ASM :=hi_speed_irq.asm
-endif
-
 # The output file name
 TARGET = toad4
 
@@ -51,7 +42,6 @@ UPLOADER := java -cp ~/EazyCNC-Project/classes:/Volumes/Partition2/Users/nyholku
 ENCODER := /Volumes/Partition2/Users/nyholku/diolan-plus2/encoder/build/encoder
 HEXMATE :=  /Applications/microchip/xc8/v2.32/pic/bin/hexmate
 
-BOOTLOADER := ../diolan-plus2-toad5/fw/bootloader.hex
 
 
 # The source files that make up the project go here
@@ -65,7 +55,7 @@ LIBS =  libc18f.lib libm18f.lib libsdcc.lib
 SDCC = /Volumes/Partition2/Users/nyholku/sdcc340/bin/sdcc
 
 # Compiler flags go here
-# --use-crt=crt0.o
+# --use-crt=crt0.o            TOAD_HW_VERSION
 SDCCFLAGS = "-Wl -f 0xffff" -DTOAD_HW_VERSION=${HWVERSION} --verbose --no-crt --ivt-loc=0x800 -V -L /Volumes/Partition2/Users/nyholku/sdcc340/non-free/lib/pic16 -Wa,-S,0 -Wl,-m,-s18f45k50.lkr -mpic16 -p18f45k50 --disable-warning 85 --std-sdcc99 --obanksel=3 --use-non-free
 
 # Where to store the target/intermediate/temporary/object files
@@ -73,15 +63,24 @@ OBJDIR = ../obj
 
 
 
-.PHONY: toad4-4
-toad4-4: $(OBJDIR)/$(TARGET).hex
-toad4-4: HI_SPEED_IRQ_ASM :=hi_speed_irq-hw4.asm
-toad4-4: HWVERSION := HW4
+.PHONY: toad4
+toad4: $(OBJDIR)/$(TARGET).hex
+toad4: HI_SPEED_IRQ_ASM :=hi_speed_irq-hw4.asm
+toad4: HWVERSION := HW4
+toad4: BOOTLOADER := ../diolan-plus2-toad4/fw/bootloader.hex
 
-.PHONY: toad4-5
-toad4-5: $(OBJDIR)/$(TARGET).hex
-toad4-5: HI_SPEED_IRQ_ASM :=hi_speed_irq.asm
-toad4-4: HWVERSION := HW5
+.PHONY: toad5
+toad5: $(OBJDIR)/$(TARGET).hex
+toad5: HI_SPEED_IRQ_ASM :=hi_speed_irq.asm
+toad5: HWVERSION := HW5
+toad5: BOOTLOADER := ../diolan-plus2-toad5/fw/bootloader.hex
+
+.PHONY: comparebootloaders
+comparebootloaders:
+	$(HEXMATE) -o$../bootloader-backedp.hex -fill=0xFF@0x0000:0x07FF r0000-07FF,/Volumes/Partition2/Users/nyholku/diolan-plus2/fw-backup-25.7.2017/bootloader.hex r000802-FFFFFF,/Volumes/Partition2/Users/nyholku/diolan-plus2/fw-backup-25.7.2017/bootloader.hex
+	$(HEXMATE) -o$../bootloader-toad4.hex -fill=0xFF@0x0000:0x07FF r0000-07FF,../diolan-plus2-toad4/fw/bootloader.hex r000802-FFFFFF,../diolan-plus2-toad4/fw/bootloader.hex
+	$(HEXMATE) -o$../bootloader-toad5.hex -fill=0xFF@0x0000:0x07FF r0000-07FF,../diolan-plus2-toad5/fw/bootloader.hex r000802-FFFFFF,../diolan-plus2-toad5/fw/bootloader.hex
+
 #
 #-------------------------------------------------------------------------------
 #
@@ -150,14 +149,14 @@ load:
 #
 
 # First include the dependencies
-include $(addprefix $(OBJDIR)/, $(SRCS:.c=.dep))
+#include $(addprefix $(OBJDIR)/, $(SRCS:.c=.dep))
 
 # Then recreate them
-$(OBJDIR)/%.dep: %.c $$(@D)/.f
-	 @set -e; rm -f $@; \
-	  $(SDCC) -c -M $(SDCCFLAGS) $< > $@.$$$$; \
-	  sed -e '1 s,^,$(OBJDIR)/,' -e 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
-     rm -f $@.$$$$
+#$(OBJDIR)/%.dep: %.c $$(@D)/.f
+#	 @set -e; rm -f $@; \
+#	  $(SDCC) -c -M $(SDCCFLAGS) $< > $@.$$$$; \
+#	  sed -e '1 s,^,$(OBJDIR)/,' -e 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
+#    rm -f $@.$$$$
 
 #------------------------------------------------------------------------------
 #

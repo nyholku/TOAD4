@@ -171,7 +171,7 @@ extern volatile stepper_state_t g_stepper_states[NUMBER_OF_MOTORS];
 
 #define FW_VERSION_MAJOR 2
 #define FW_VERSION_MINOR 0
-#define FW_VERSION_BUGFIX 9
+#define FW_VERSION_BUGFIX 10
 
 #define NCO_FREQUENCY 100000
 

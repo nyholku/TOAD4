@@ -1,5 +1,12 @@
-SRC="../obj/toad4-pickit.hex"
-DST="../obj/toad4-pickit-with-serialno.hex"
+if [ "$#" -ne 1 ]; then
+    echo "usage: bload (toad4 | toad5)"
+    exit 1
+fi
+TOAD=$1
+NOMOTORS=${TOAD: -1}
+FW_VERSION=$(./get-toad-version)
+SRC=../obj-$1/$1_${FW_VERSION}-${NOMOTORS}-pickit.hex
+DST="../obj-$1/$1_${FW_VERSION}-${NOMOTORS}-pickit-with-serialno.hex"
 SERNO=`python3 serialno.py`
 REPLACE=":107FC00000000000000000000000000000000000B1"
 sed "s/$REPLACE/$SERNO/g" <$SRC >$DST

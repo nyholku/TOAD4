@@ -1,2 +1,0 @@
-echo Note that with Code Protection on it is possible to load firmware only
-../pk2cmd/pk2cmd -b../pk2cmd -f../obj/toad4-pickit.hex -pPIC18f45k50 -l16 -e -m -j -r

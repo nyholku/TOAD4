@@ -1,7 +1,7 @@
 #ifndef __SWUART_H__
 #define __SWUART_H__
 
-#include <stdint.h>
+#include <stdint.h> 
 
 extern volatile uint8_t g_uart_rx_data;
 extern volatile uint8_t g_uart_rx_bit9;

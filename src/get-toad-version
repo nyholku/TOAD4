@@ -1,0 +1,6 @@
+SRCDIR=$(pwd)
+FW_VERSION_MAJOR=$(awk '$2 == "FW_VERSION_MAJOR"{print $3; exit}' ${SRCDIR}/toad4.h)
+FW_VERSION_MINOR=$(awk '$2 == "FW_VERSION_MINOR"{print $3; exit}' ${SRCDIR}/toad4.h)
+FW_VERSION_BUGFIX=$(awk '$2 == "FW_VERSION_BUGFIX"{print $3; exit}' ${SRCDIR}/toad4.h)
+FW_VERSION=${FW_VERSION_MAJOR}.${FW_VERSION_MINOR}.${FW_VERSION_BUGFIX}
+echo ${FW_VERSION}

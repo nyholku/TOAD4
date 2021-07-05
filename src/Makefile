@@ -1,13 +1,13 @@
-
 OBJDIRS = ../obj-toad4 ../obj-toad5
 
 ifeq (src,$(notdir $(CURDIR)))
+FW_VERSION := $(shell $(CURDIR)/get-toad-version)
+
+$(info FW_VERSION is [${FW_VERSION}])
+
 include target.mk
 else
 #----- End Boilerplate
-
-
-
 
 
 # upload the encoded hex file using the bootload process
@@ -15,8 +15,6 @@ else
 VPATH = $(SRCDIR)
 #Normal makefile rules here
 
-# The output file name
-TARGET = toad4
 
 # This is necessary so that pk2cmd (used by 'load' script) is found and for the
 # pk2cmd to find its support files (it seems to search current dir which is wrong)
@@ -50,13 +48,17 @@ ifeq (obj-toad4,$(notdir $(CURDIR)))
 	HI_SPEED_IRQ_ASM :=hi_speed_irq-toad4.asm
 	HWVERSION := HW4
 	BOOTLOADER := ../diolan-plus2-toad4/fw/bootloader.hex
+	TARGET = toad4_$(FW_VERSION)-4
 endif
 
 ifeq (obj-toad5,$(notdir $(CURDIR)))
 	HI_SPEED_IRQ_ASM :=hi_speed_irq-toad5.asm
 	HWVERSION := HW5
 	BOOTLOADER := ../diolan-plus2-toad5/fw/bootloader.hex
+	TARGET = toad5_$(FW_VERSION)-5
 endif
+
+
 #
 #
 #-------------------------------------------------------------------------------
@@ -76,6 +78,7 @@ endif
 # dont' let make remove the flag files automatically
 .PRECIOUS: %/.f
 #
+
 #-------------------------------------------------------------------------------
 #
 # Actual rules
@@ -96,13 +99,23 @@ $(OBJDIR)/$(TARGET).hex: $(addprefix $(OBJDIR)/, $(SRCS:.c=.o))  $(OBJDIR)/hi_sp
 # combine the bootloader and firmware to one hex file that can be programmed with pickit ready to run
 	$(HEXMATE) -o$(OBJDIR)/$(TARGET)-pickit.hex -fill=0xFFFF@0xF00001:0xF000FF -fill=0xA5@0xF00000:0xF00000 -fill=0x00@0x300000:0x30000D $(OBJDIR)/$(TARGET)-normalized.hex $(OBJDIR)/bootloader-normalized.hex
 # encode the bootloader for bootloading purposes, suppress output so as NOT to reveal the secret key
-	@$(ENCODER) -ix $(OBJDIR)/$(TARGET)-normalized.hex -ox $(OBJDIR)/$(TARGET)-encoded.hex -e ${TOAD4PLUS_DIALON_KEY2}
+	@$(ENCODER) -ix $(OBJDIR)/$(TARGET)-normalized.hex -ox $(OBJDIR)/$(TARGET)-crypted.hex -e ${TOAD4PLUS_DIALON_KEY2}
 
 # Compile the high speed interrupt asm file
 $(OBJDIR)/hi_speed_irq.o: $(SRCDIR)/${HI_SPEED_IRQ_ASM}
-	@echo "******************************************************************************** >>> " $(SRCDIR)/${HI_SPEED_IRQ_ASM}
 	gpasm -D TOAD_HW_VERSION=${HWVERSION} -o $(OBJDIR)/hi_speed_irq.o -c $(SRCDIR)/${HI_SPEED_IRQ_ASM}
 
 
+
+# dependency generation
+include $(addprefix $(OBJDIR)/, $(SRCS:.c=.dep))
+
+# Then recreate them
+$(OBJDIR)/%.dep: %.c $$(@D)/.f
+	 @echo "Depency generation " $<
+	 set -e; rm -f $@; \
+	  $(SDCC) -c -M $(SDCCFLAGS) $< > $@.$$$$; \
+	  sed -e '1 s,^,$(OBJDIR)/,' -e 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
+	  rm -f $@.$$$$
 #----- Begin Boilerplate
 endif

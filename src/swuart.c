@@ -13,7 +13,7 @@ void swuart_tick(uint8_t input) {
 	g_uart_tick_cntr++;
 
 	if (input==1) {
-	   if (g_uart_connected > 0) 
+	   if (g_uart_connected > 0)
 		  g_uart_connected--;
         }
     else

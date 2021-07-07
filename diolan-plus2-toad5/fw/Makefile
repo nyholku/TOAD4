@@ -1,6 +1,6 @@
-;
-; 7.7.2021 Modified to compile with gputils
-;
+#
+# 7.7.2021 Modified to compile with gputils
+#
 VID		    = 0x1D50
 PID		    = 0x6020
 XTEA_KEY	= ${TOAD4PLUS_DIALON_KEY}
